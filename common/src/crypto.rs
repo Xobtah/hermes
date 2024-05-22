@@ -12,18 +12,37 @@ const X25519_PRIVATE_KEY_SIZE: usize = 32;
 const XCHACHA20_POLY1305_NONCE_SIZE: usize = 24;
 const XCHACHA20_POLY1305_KEY_SIZE: usize = 32;
 
+#[derive(thiserror::Error, Debug)]
+pub enum CryptoError {
+    #[error("signature verification failed: {0}")]
+    SignatureVerification(ed25519_dalek::SignatureError),
+    #[error("cipher failed: {0}")]
+    Cipher(chacha20poly1305::aead::Error),
+}
+
+impl From<ed25519_dalek::SignatureError> for CryptoError {
+    fn from(e: ed25519_dalek::SignatureError) -> Self {
+        CryptoError::SignatureVerification(e)
+    }
+}
+
+impl From<chacha20poly1305::aead::Error> for CryptoError {
+    fn from(e: chacha20poly1305::aead::Error) -> Self {
+        CryptoError::Cipher(e)
+    }
+}
+
+pub type CryptoResult<T> = Result<T, CryptoError>;
 pub type KeyExchangePublicKey = [u8; X25519_PUBLIC_KEY_SIZE];
 pub type KeyExchangePrivateKey = [u8; X25519_PRIVATE_KEY_SIZE];
 pub type Nonce = [u8; XCHACHA20_POLY1305_NONCE_SIZE];
 
-pub fn get_identity() -> SigningKey {
+pub fn get_signing_key() -> SigningKey {
     SigningKey::generate(&mut rand::rngs::OsRng {})
 }
 
-pub fn get_identity_from(
-    secret_key: &[u8; ed25519_dalek::SECRET_KEY_LENGTH],
-) -> Result<SigningKey, anyhow::Error> {
-    Ok(SigningKey::from_bytes(secret_key))
+pub fn get_signing_key_from(secret_key: &[u8; ed25519_dalek::SECRET_KEY_LENGTH]) -> SigningKey {
+    SigningKey::from_bytes(secret_key)
 }
 
 pub fn generate_key_exchange_key_pair(
@@ -50,16 +69,14 @@ pub fn verify_key_exchange_key_pair(
     verifying_key: &VerifyingKey,
     ephemeral_public_key: KeyExchangePublicKey,
     signature: Signature,
-) -> Result<(), anyhow::Error> {
-    verifying_key
-        .verify(&ephemeral_public_key, &signature)
-        .map_err(|e| anyhow::anyhow!(e))
+) -> CryptoResult<()> {
+    Ok(verifying_key.verify(&ephemeral_public_key, &signature)?)
 }
 
 pub fn encrypt(
     encryption_ephemeral_public_key: KeyExchangePublicKey,
     plain_data: &[u8],
-) -> Result<(KeyExchangePublicKey, Nonce, Vec<u8>), anyhow::Error> {
+) -> CryptoResult<(KeyExchangePublicKey, Nonce, Vec<u8>)> {
     let mut rand_generator = rand::rngs::OsRng {};
 
     // Generate ephemeral keypair
@@ -84,9 +101,7 @@ pub fn encrypt(
 
     // Encrypt data
     let cipher = XChaCha20Poly1305::new(key.as_ref().into());
-    let encrypted_data = cipher
-        .encrypt(&nonce.into(), plain_data)
-        .map_err(|e| anyhow::anyhow!(e))?;
+    let encrypted_data = cipher.encrypt(&nonce.into(), plain_data)?;
 
     shared_secret.zeroize();
     key.zeroize();
@@ -107,12 +122,6 @@ fn make_signature_buffer(
         &nonce,
     ]
     .concat()
-    // let mut buffer_to_sign = data_id.as_bytes().to_vec();
-    // buffer_to_sign.append(&mut agent_id.as_bytes().to_vec());
-    // buffer_to_sign.append(&mut encrypted_data.clone());
-    // buffer_to_sign.append(&mut decryption_ephemeral_public_key.to_vec());
-    // buffer_to_sign.append(&mut nonce.to_vec());
-    // buffer_to_sign
 }
 
 pub fn sign(
@@ -121,14 +130,14 @@ pub fn sign(
     decryption_ephemeral_public_key: KeyExchangePublicKey,
     encrypted_data: &[u8],
     nonce: Nonce,
-) -> Result<Signature, anyhow::Error> {
+) -> Signature {
     // Signature
-    Ok(signing_key.sign(&make_signature_buffer(
+    signing_key.sign(&make_signature_buffer(
         additional_data,
         encrypted_data,
         decryption_ephemeral_public_key,
         nonce,
-    )))
+    ))
 }
 
 pub fn verify(
@@ -138,19 +147,17 @@ pub fn verify(
     decryption_ephemeral_public_key: KeyExchangePublicKey,
     encrypted_data: &[u8],
     nonce: Nonce,
-) -> Result<(), anyhow::Error> {
+) -> CryptoResult<()> {
     // Verify signature
-    verifying_key
-        .verify(
-            &make_signature_buffer(
-                additional_data,
-                encrypted_data,
-                decryption_ephemeral_public_key,
-                nonce,
-            ),
-            &signature,
-        )
-        .map_err(|e| anyhow::anyhow!(e))
+    Ok(verifying_key.verify(
+        &make_signature_buffer(
+            additional_data,
+            encrypted_data,
+            decryption_ephemeral_public_key,
+            nonce,
+        ),
+        &signature,
+    )?)
 }
 
 pub fn decrypt(
@@ -158,7 +165,7 @@ pub fn decrypt(
     ephemeral_public_key: [u8; X25519_PUBLIC_KEY_SIZE],
     ephemeral_private_key: [u8; X25519_PRIVATE_KEY_SIZE],
     nonce: [u8; XCHACHA20_POLY1305_NONCE_SIZE],
-) -> Result<Vec<u8>, anyhow::Error> {
+) -> CryptoResult<Vec<u8>> {
     // Key exchange
     let mut shared_secret = x25519(ephemeral_private_key, ephemeral_public_key);
 
@@ -169,9 +176,7 @@ pub fn decrypt(
 
     // Decrypt
     let cipher = XChaCha20Poly1305::new(key.as_ref().into());
-    let plain_data = cipher
-        .decrypt(&nonce.into(), encrypted_data)
-        .map_err(|e| anyhow::anyhow!(e))?;
+    let plain_data = cipher.decrypt(&nonce.into(), encrypted_data)?;
 
     shared_secret.zeroize();
     key.zeroize();
@@ -186,7 +191,7 @@ mod tests {
 
     #[test]
     fn test_signature() {
-        let mut signing_key = super::get_identity();
+        let mut signing_key = super::get_signing_key();
         println!(
             "[+] Signing key: {:?}",
             BASE64_STANDARD.encode(signing_key.as_bytes())
@@ -213,8 +218,7 @@ mod tests {
             decryption_ephemeral_public_key,
             &encrypted_data,
             nonce,
-        )
-        .unwrap();
+        );
 
         super::verify(
             &verifying_key,
@@ -254,9 +258,9 @@ mod tests {
 
     #[test]
     fn test_end_to_end() {
-        let mut signing_key_alice = super::get_identity();
+        let mut signing_key_alice = super::get_signing_key();
         let alice_verifying_key = signing_key_alice.verifying_key();
-        let mut signing_key_bob = super::get_identity();
+        let mut signing_key_bob = super::get_signing_key();
         let bob_verifying_key = signing_key_bob.verifying_key();
 
         let plain_data = "Hello, world!";
@@ -292,8 +296,7 @@ mod tests {
             key_exchange_public_key,
             &encrypted_data,
             nonce,
-        )
-        .unwrap();
+        );
 
         // Bob decrypts data from Alice
         println!("[+] Bob decrypts data from Alice");

