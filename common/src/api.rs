@@ -20,7 +20,7 @@ pub struct Mission {
     pub task: Task,
     pub result: Option<String>,
     #[serde(default, rename = "publicKey")]
-    pub public_key: crate::crypto::KeyExchangePublicKey,
+    pub public_key: crate::crypto::KeyExchangePublicKey, // TODO Don't put PK here
     #[serde(default)]
     pub issued_at: chrono::DateTime<chrono::Utc>,
     pub completed_at: Option<chrono::DateTime<chrono::Utc>>,

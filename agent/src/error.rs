@@ -12,4 +12,6 @@ pub enum AgentError {
     Io(#[from] std::io::Error),
     #[error("utf8 error: {0}")]
     Utf8(#[from] std::str::Utf8Error),
+    #[error("base64 error: {0}")]
+    Base64(#[from] base64::DecodeError),
 }

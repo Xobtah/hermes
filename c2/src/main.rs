@@ -23,7 +23,13 @@ async fn main() -> C2Result<()> {
     tracing_subscriber::fmt()
         .with_max_level(tracing::Level::DEBUG)
         .init();
-    info!("C2 DAEMON STARTING");
+    info!(" ░▒▓██████▓▒░░▒▓███████▓▒░ ");
+    info!("░▒▓█▓▒░░▒▓█▓▒░      ░▒▓█▓▒░");
+    info!("░▒▓█▓▒░             ░▒▓█▓▒░");
+    info!("░▒▓█▓▒░       ░▒▓██████▓▒░ ");
+    info!("░▒▓█▓▒░      ░▒▓█▓▒░       ");
+    info!("░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░       ");
+    info!(" ░▒▓██████▓▒░░▒▓████████▓▒░");
 
     let signing_key = crypto::get_signing_key_from(
         BASE64_STANDARD

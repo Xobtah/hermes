@@ -10,10 +10,11 @@ env_logger = { workspace = true }
 # arti-client = { workspace = true }
 # arti-hyper = { workspace = true }
 common = { workspace = true }
-futures = { workspace = true }
+# futures = { workspace = true }
 # hyper = { workspace = true }
 libc = { workspace = true }
 log = { workspace = true }
+self-replace = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }

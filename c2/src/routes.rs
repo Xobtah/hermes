@@ -128,7 +128,9 @@ mod missions {
                 ..
             } = mission
             {
-                let agent_bin = std::fs::read("target/debug/agent").unwrap();
+                // let agent_bin =
+                //     std::fs::read("target/x86_64-pc-windows-gnu/release/agent.exe").unwrap();
+                let agent_bin = std::fs::read("target/release/agent").unwrap();
                 api::Mission {
                     task: api::Task::Update(agent_bin),
                     ..mission
