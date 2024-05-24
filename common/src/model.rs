@@ -1,4 +1,4 @@
-use std::fmt;
+use std::{fmt, str::FromStr};
 
 use serde::{Deserialize, Serialize};
 
@@ -9,6 +9,29 @@ pub struct Agent {
     pub id: i32,
     pub name: String,
     pub identity: [u8; ed25519_dalek::PUBLIC_KEY_LENGTH],
+    pub platform: Platform,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    pub last_seen_at: chrono::DateTime<chrono::Utc>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Copy, Clone, PartialEq, Eq)]
+pub enum Platform {
+    Unix,
+    Windows,
+}
+
+impl ToString for Platform {
+    fn to_string(&self) -> String {
+        serde_json::to_string(self).unwrap()
+    }
+}
+
+impl FromStr for Platform {
+    type Err = serde_json::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        serde_json::from_str(s)
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -19,8 +42,6 @@ pub struct Mission {
     pub agent_id: i32,
     pub task: Task,
     pub result: Option<String>,
-    #[serde(default, rename = "publicKey")]
-    pub public_key: crate::crypto::KeyExchangePublicKey, // TODO Don't put PK here
     #[serde(default)]
     pub issued_at: chrono::DateTime<chrono::Utc>,
     pub completed_at: Option<chrono::DateTime<chrono::Utc>>,
