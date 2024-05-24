@@ -123,8 +123,6 @@ fn failsafe_loop(
             }
             Err(e) => error!("Error: {e}"),
         }
-        thread::sleep(time::Duration::from_secs(5));
-        // thread::sleep(time::Duration::from_millis(500));
     }
     Ok(())
 }

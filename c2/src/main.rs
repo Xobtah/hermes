@@ -18,9 +18,14 @@ pub const IDENTITY: &str = include_str!("../../c2.id");
 #[derive(Clone)]
 pub struct C2State {
     pub signing_key: SigningKey,
-    pub conn: Arc<Mutex<rusqlite::Connection>>,
+    pub conn: ThreadSafeConnection,
     pub ephemeral_private_keys: Arc<Mutex<HashMap<i32, crypto::KeyExchangePrivateKey>>>,
 }
+
+unsafe impl Send for C2State {}
+unsafe impl Sync for C2State {}
+
+pub type ThreadSafeConnection = Arc<Mutex<rusqlite::Connection>>;
 
 #[tokio::main]
 async fn main() -> C2Result<()> {
@@ -46,6 +51,7 @@ async fn main() -> C2Result<()> {
 
     let conn = rusqlite::Connection::open("c2.db")?;
 
+    // TODO Make migration script
     conn.execute("PRAGMA foreign_keys = ON", [])?;
 
     conn.execute(

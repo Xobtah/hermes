@@ -5,7 +5,7 @@ use std::{
     process::{self, Child, Command, Output},
 };
 
-use common::{api, crypto};
+use common::{model, crypto};
 
 use crate::AgentResult;
 
@@ -35,11 +35,11 @@ pub fn execute_cmd(cmd: &str) -> io::Result<Output> {
         .output()
 }
 
-pub fn execute_detached(bin: &Path, mission: api::Mission) -> io::Result<Child> {
+pub fn execute_detached(bin: &Path, mission: model::Mission) -> io::Result<Child> {
     Command::new(&bin)
         .creation_flags(CREATE_NEW_PROCESS_GROUP | DETACHED_PROCESS | CREATE_NO_WINDOW)
-        .arg(serde_json::to_string(&api::Mission {
-            task: api::Task::Stop,
+        .arg(serde_json::to_string(&model::Mission {
+            task: model::Task::Stop,
             ..mission
         })?)
         .stdin(process::Stdio::inherit())
