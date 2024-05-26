@@ -10,8 +10,6 @@ use tracing::{debug, error, warn};
 
 use crate::{services, C2State};
 
-// TODO Fix logs
-// TODO Fix error system
 // TODO Either encrypt all routes or listen on a different interface for admin routes
 
 pub fn init_router() -> Router<C2State> {
@@ -22,8 +20,8 @@ pub fn init_router() -> Router<C2State> {
             Router::new().route("/", get(agents::get)).nest(
                 "/:agent_id",
                 Router::new()
-                    .route("/update", put(agents::update_bin))
-                    .route("/name/:agent_name", put(agents::update_name)),
+                    .route("/", put(agents::update))
+                    .route("/update", put(agents::update_bin)),
             ),
         )
         .nest(
@@ -131,16 +129,23 @@ mod agents {
         (StatusCode::OK).into_response()
     }
 
-    pub async fn update_name(
+    pub async fn update(
         State(c2_state): State<C2State>,
-        Path((agent_id, agent_name)): Path<(i32, String)>,
+        Path(agent_id): Path<i32>,
+        agent_json: String,
     ) -> impl IntoResponse {
-        let Ok(agent) =
-            services::agents::update_name_by_id(c2_state.conn.clone(), agent_id, &agent_name)
-        else {
-            return (StatusCode::NOT_FOUND, AGENT_NOT_FOUND).into_response();
-        };
-        (StatusCode::OK, Json(Some(agent))).into_response()
+        let agent_json: serde_json::Value = serde_json::from_str(&agent_json).unwrap();
+        if let Some(agent) = services::agents::get_by_id(c2_state.conn.clone(), agent_id) {
+            match services::agents::update_by_id(c2_state.conn.clone(), &agent.merge(agent_json)) {
+                Ok(agent) => (StatusCode::OK, Json(Some(agent))).into_response(),
+                Err(e) => {
+                    error!("{e}");
+                    (StatusCode::INTERNAL_SERVER_ERROR).into_response()
+                }
+            }
+        } else {
+            (StatusCode::NOT_FOUND, AGENT_NOT_FOUND).into_response()
+        }
     }
 }
 
@@ -203,7 +208,7 @@ mod missions {
             return (StatusCode::NO_CONTENT).into_response();
         };
 
-        // TODO Fix that
+        // TODO Create a proper to store & deliver agent versions
         let mission = if let model::Mission {
             task: model::Task::Update(_),
             ..

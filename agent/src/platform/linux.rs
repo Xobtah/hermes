@@ -1,27 +1,11 @@
 use std::{
-    fs, io,
+    io,
     os::unix::process::CommandExt,
     path::Path,
     process::{self, Child, Command, Output},
 };
 
-use common::{model, crypto};
-
-use crate::AgentResult;
-
-const SIGNING_KEY_PATH: &str = "/Users/sylvain/.hermes"; // TODO Change it
-
-pub fn signing_key() -> AgentResult<crypto::SigningKey> {
-    let signing_key = if Path::new(SIGNING_KEY_PATH).exists() {
-        crypto::get_signing_key_from(fs::read(SIGNING_KEY_PATH)?.as_slice().try_into().unwrap())
-    } else {
-        // fs::create_dir_all(SIGNING_KEY_DIR_PATH)?;
-        let signing_key = crypto::get_signing_key();
-        fs::write(SIGNING_KEY_PATH, signing_key.as_bytes())?;
-        signing_key
-    };
-    Ok(signing_key)
-}
+use common::model;
 
 pub fn execute_cmd(cmd: &str) -> io::Result<Output> {
     Command::new("sh").arg("-c").arg(cmd).output()

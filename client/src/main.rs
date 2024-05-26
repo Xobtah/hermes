@@ -58,14 +58,14 @@ fn prompt(prompt: &str) -> Result<String, dialoguer::Error> {
         .map(|s: String| s.trim().to_string())
 }
 
-fn select_agent_id(agents: &[model::Agent]) -> ClientResult<Option<i32>> {
+fn select_agent(agents: &[model::Agent]) -> ClientResult<Option<&model::Agent>> {
     Ok(
         dialoguer::FuzzySelect::with_theme(&dialoguer::theme::ColorfulTheme::default())
             .with_prompt("Select an agent")
             .default(0)
             .items(&agents.iter().map(agent_fmt).collect::<Vec<_>>())
             .interact_opt()?
-            .and_then(|i| agents.get(i).map(|a| a.id)),
+            .and_then(|i| agents.get(i)),
     )
 }
 
@@ -102,7 +102,7 @@ fn main() -> ClientResult<()> {
                 0 => {
                     let agents = list_agents()?;
 
-                    let Some(agent_id) = select_agent_id(&agents)? else {
+                    let Some(agent) = select_agent(&agents)? else {
                         println!("No agent selected");
                         continue;
                     };
@@ -112,15 +112,15 @@ fn main() -> ClientResult<()> {
                     )
                     .with_prompt("Select a task")
                     .default(0)
-                    .items(&["Update", "Execute", "Stop"])
+                    .items(&["Execute", "Update", "Stop"])
                     .interact_opt()?
                     .and_then(|selection| match selection {
-                        0 => {
+                        0 => Some(model::Task::Execute(prompt("Command").unwrap())),
+                        1 => {
                             // let agent_bin = fs::read("target/debug/agent").unwrap();
                             // Some(api::Task::Update(agent_bin))
                             Some(model::Task::Update(vec![]))
                         }
-                        1 => Some(model::Task::Execute(prompt("Command").unwrap())),
                         2 => Some(model::Task::Stop),
                         _ => unreachable!(),
                     }) else {
@@ -128,7 +128,7 @@ fn main() -> ClientResult<()> {
                         continue;
                     };
 
-                    let mission = issue_mission(agent_id, task)?;
+                    let mission = issue_mission(agent.id, task)?;
                     loop {
                         match get_mission_result(mission.id) {
                             Ok(Some(result)) => {
@@ -149,17 +149,18 @@ fn main() -> ClientResult<()> {
                 2 => {
                     let agents = list_agents()?;
 
-                    let Some(agent_id) = select_agent_id(&agents)? else {
+                    let Some(agent) = select_agent(&agents)? else {
                         println!("No agent selected");
                         continue;
                     };
 
                     let name = prompt("New name")?;
 
-                    let response = ureq::put(&format!(
-                        "http://localhost:3000/agents/{agent_id}/name/{name}"
-                    ))
-                    .call()?;
+                    let response = ureq::put(&format!("http://localhost:3000/agents/{}", agent.id))
+                        .send_json(model::Agent {
+                            name,
+                            ..agent.clone()
+                        })?;
 
                     if response.status() == 200 {
                         println!("Agent name updated");

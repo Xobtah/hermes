@@ -25,6 +25,9 @@ pub struct C2State {
 unsafe impl Send for C2State {}
 unsafe impl Sync for C2State {}
 
+// Reason for this: https://www.reddit.com/r/rust/comments/pnzple/comment/hct59dj/
+// "In general, I recommend that you never lock the standard library mutex from async functions.
+// Instead, create a non-async function that locks it and accesses it, then call that non-async function from your async code."
 pub type ThreadSafeConnection = Arc<Mutex<rusqlite::Connection>>;
 
 #[tokio::main]
@@ -81,7 +84,6 @@ async fn main() -> C2Result<()> {
 
     let ephemeral_private_keys = HashMap::new();
 
-    // build our application with a single route
     let app = routes::init_router()
         .layer(TraceLayer::new_for_http())
         // .layer(DefaultBodyLimit::max(2048))
@@ -91,7 +93,6 @@ async fn main() -> C2Result<()> {
             ephemeral_private_keys: Arc::new(Mutex::new(ephemeral_private_keys)),
         });
 
-    // run our app with hyper, listening globally on port 3000
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await?;
     Ok(axum::serve(listener, app).await?)
 }

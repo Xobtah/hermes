@@ -10,8 +10,37 @@ pub struct Agent {
     pub name: String,
     pub identity: [u8; ed25519_dalek::PUBLIC_KEY_LENGTH],
     pub platform: Platform,
+    #[serde(rename = "createdAt")]
     pub created_at: chrono::DateTime<chrono::Utc>,
+    #[serde(rename = "lastSeenAt")]
     pub last_seen_at: chrono::DateTime<chrono::Utc>,
+}
+
+impl Agent {
+    pub fn merge(self, value: serde_json::Value) -> Self {
+        Agent {
+            id: value
+                .get("id")
+                .and_then(serde_json::Value::as_i64)
+                .unwrap_or(self.id as i64) as i32,
+            name: value
+                .get("name")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or(&self.name)
+                .to_owned(),
+            identity: value
+                .get("identity")
+                .and_then(|v| serde_json::from_value(v.clone()).ok()) // TODO Errors are hidden
+                .unwrap_or(self.identity),
+            platform: value
+                .get("platform")
+                .and_then(serde_json::Value::as_str)
+                .and_then(|s| Platform::from_str(s).ok()) // TODO Errors are hidden
+                .unwrap_or(self.platform),
+            created_at: self.created_at,
+            last_seen_at: self.last_seen_at,
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Copy, Clone, PartialEq, Eq)]

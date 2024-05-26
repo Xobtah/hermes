@@ -70,18 +70,23 @@ pub mod agents {
         .ok()
     }
 
-    pub fn update_name_by_id(conn: ThreadSafeConnection, id: i32, name: &str) -> C2Result<Agent> {
-        debug!("Updating agent {} name", id);
+    pub fn update_by_id(conn: ThreadSafeConnection, agent: &model::Agent) -> C2Result<Agent> {
+        debug!("Updating agent {} name", agent.id);
         let conn = conn.lock().unwrap();
 
         conn.execute(
-            "UPDATE agents SET name = ?1 WHERE id = ?2",
-            rusqlite::params![name, id],
+            "UPDATE agents SET name = ?1, identity = ?2, platform = ?3 WHERE id = ?4",
+            rusqlite::params![
+                agent.name,
+                agent.identity,
+                serde_json::to_string(&agent.platform)?,
+                agent.id
+            ],
         )?;
 
         Ok(conn.query_row(
             "SELECT id, name, identity, platform, created_at, last_seen_at FROM agents WHERE id = ?1",
-            [id],
+            [agent.id],
             row_to_agent,
         )?)
     }
