@@ -1,12 +1,15 @@
-// TODO Fix the way the data is fetched, API has to be the same for every entity
+type RusqliteResult<T> = Result<T, rusqlite::Error>;
 
 pub mod agents {
     use common::model::{self, Agent};
+    use rusqlite::OptionalExtension;
     use tracing::debug;
 
     use crate::{error::C2Result, ThreadSafeConnection};
 
-    fn row_to_agent(row: &rusqlite::Row) -> Result<Agent, rusqlite::Error> {
+    use super::RusqliteResult;
+
+    fn row_to_agent(row: &rusqlite::Row) -> RusqliteResult<Agent> {
         Ok(Agent {
             id: row.get("id")?,
             name: row.get("name")?,
@@ -48,7 +51,7 @@ pub mod agents {
             .collect())
     }
 
-    pub fn get_by_id(conn: ThreadSafeConnection, id: i32) -> Option<Agent> {
+    pub fn get_by_id(conn: ThreadSafeConnection, id: i32) -> RusqliteResult<Option<Agent>> {
         debug!("Getting agent {}", id);
         let conn = conn.lock().unwrap();
         conn.query_row(
@@ -56,18 +59,20 @@ pub mod agents {
             [id],
             row_to_agent,
         )
-        .ok()
+        .optional()
     }
 
-    pub fn get_by_identity(conn: ThreadSafeConnection, identity: [u8; 32]) -> Option<Agent> {
+    pub fn get_by_identity(
+        conn: ThreadSafeConnection,
+        identity: [u8; 32],
+    ) -> RusqliteResult<Option<Agent>> {
         debug!("Getting agent by identity");
         let conn = conn.lock().unwrap();
         conn.query_row(
             "SELECT id, name, identity, platform, created_at, last_seen_at FROM agents WHERE identity = ?1",
             [identity],
             row_to_agent,
-        )
-        .ok()
+        ).optional()
     }
 
     pub fn update_by_id(conn: ThreadSafeConnection, agent: &model::Agent) -> C2Result<Agent> {
@@ -96,9 +101,12 @@ pub mod missions {
     use std::sync::{Arc, Mutex};
 
     use common::model::Mission;
+    use rusqlite::OptionalExtension;
     use tracing::debug;
 
     use crate::{error::C2Result, ThreadSafeConnection};
+
+    use super::RusqliteResult;
 
     fn row_to_mission(row: &rusqlite::Row) -> Result<Mission, rusqlite::Error> {
         Ok(Mission {
@@ -131,48 +139,44 @@ pub mod missions {
         )?)
     }
 
-    pub fn get_next(conn: Arc<Mutex<rusqlite::Connection>>, agent_id: i32) -> Option<Mission> {
+    pub fn get_next(
+        conn: Arc<Mutex<rusqlite::Connection>>,
+        agent_id: i32,
+    ) -> RusqliteResult<Option<Mission>> {
         debug!("Getting next mission for agent {}", agent_id);
         conn.lock().unwrap().query_row(
             "SELECT id, agent_id, task, result, issued_at, completed_at FROM missions WHERE agent_id = ?1 AND completed_at IS NULL ORDER BY issued_at ASC LIMIT 1",
             [agent_id],
             row_to_mission,
         )
-        .ok()
+        .optional()
     }
 
     pub async fn poll_next(
         conn: Arc<Mutex<rusqlite::Connection>>,
         agent_id: i32,
-    ) -> Option<Mission> {
+    ) -> RusqliteResult<Option<Mission>> {
         debug!("Polling next mission for agent {}", agent_id);
         for _ in 0..5 {
-            if let Some(mission) = get_next(conn.clone(), agent_id) {
-                return Some(mission);
+            if let Some(mission) = get_next(conn.clone(), agent_id)? {
+                return Ok(Some(mission));
             }
             tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
         }
-        None
+        Ok(None)
     }
 
-    pub fn get_by_id(conn: ThreadSafeConnection, id: i32) -> C2Result<Option<Mission>> {
+    pub fn get_by_id(conn: ThreadSafeConnection, id: i32) -> RusqliteResult<Option<Mission>> {
         debug!("Getting mission {}", id);
         let conn = conn.lock().unwrap();
-        match conn.query_row(
+        conn.query_row(
             "SELECT id, agent_id, task, result, issued_at, completed_at FROM missions WHERE id = ?1 LIMIT 1",
             [id],
             row_to_mission,
-        ) {
-            Ok(mission) => Ok(Some(mission)),
-            Err(e) => if rusqlite::Error::QueryReturnedNoRows == e {
-                Ok(None)
-            } else {
-                Err(e.into())
-            },
-        }
+        ).optional()
     }
 
-    pub fn complete(conn: ThreadSafeConnection, id: i32, result: &str) -> C2Result<Mission> {
+    pub fn complete(conn: ThreadSafeConnection, id: i32, result: &str) -> RusqliteResult<Mission> {
         debug!("Completing mission {}", id);
         let conn = conn.lock().unwrap();
 
@@ -181,10 +185,10 @@ pub mod missions {
             rusqlite::params![result, id],
         )?;
 
-        Ok(conn.query_row(
+        conn.query_row(
             "SELECT id, agent_id, task, result, issued_at, completed_at FROM missions WHERE id = ?1",
             [id],
             row_to_mission,
-        )?)
+        )
     }
 }

