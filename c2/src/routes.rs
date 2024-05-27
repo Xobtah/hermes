@@ -18,12 +18,14 @@ pub fn init_router() -> Router<C2State> {
         .route("/crypto/:mission_id", get(get_crypto))
         .nest(
             "/agents",
-            Router::new().route("/", get(agents::get)).nest(
-                "/:agent_id",
-                Router::new()
-                    .route("/", put(agents::update))
-                    .route("/update", put(agents::update_bin)),
-            ),
+            Router::new()
+                .route("/", post(agents::create).get(agents::get))
+                .nest(
+                    "/:agent_id",
+                    Router::new()
+                        .route("/", put(agents::update))
+                        .route("/update", put(agents::update_bin)),
+                ),
         )
         .nest(
             "/missions",
@@ -108,6 +110,22 @@ mod agents {
 
     use super::*;
 
+    pub async fn create(
+        State(c2_state): State<C2State>,
+        Json(agent): Json<model::Agent>,
+    ) -> impl IntoResponse {
+        if let Ok(agent) = services::agents::create(
+            c2_state.conn.clone(),
+            &agent.name,
+            agent.identity,
+            agent.platform,
+        ) {
+            (StatusCode::CREATED, Json(agent)).into_response()
+        } else {
+            (StatusCode::INTERNAL_SERVER_ERROR).into_response()
+        }
+    }
+
     pub async fn get(State(c2_state): State<C2State>) -> impl IntoResponse {
         if let Ok(agents) = services::agents::get(c2_state.conn.clone()) {
             (StatusCode::OK, Json(agents)).into_response()
@@ -122,8 +140,16 @@ mod agents {
         Path(agent_id): Path<i32>,
         _bin: Bytes,
     ) -> impl IntoResponse {
-        let Ok(Some(_)) = services::agents::get_by_id(c2_state.conn.clone(), agent_id) else {
-            return (StatusCode::NOT_FOUND).into_response();
+        match services::agents::get_by_id(c2_state.conn.clone(), agent_id) {
+            Ok(Some(_)) => {}
+            Ok(None) => {
+                warn!("Agent not found");
+                return (StatusCode::NOT_FOUND, AGENT_NOT_FOUND).into_response();
+            }
+            Err(e) => {
+                error!("{e}");
+                return (StatusCode::INTERNAL_SERVER_ERROR).into_response();
+            }
         };
         if let Err(e) =
             services::missions::create(c2_state.conn.clone(), agent_id, model::Task::Update(vec![]))
@@ -163,10 +189,8 @@ mod agents {
 }
 
 mod missions {
-    use std::str::FromStr;
-
-    use axum::{extract::Path, http::HeaderMap};
-    use common::{model::Mission, PLATFORM_HEADER};
+    use axum::extract::Path;
+    use common::model::Mission;
     use tracing::error;
 
     use super::*;
@@ -184,7 +208,7 @@ mod missions {
 
     pub async fn get_next(
         State(mut c2_state): State<C2State>,
-        headers: HeaderMap,
+        // headers: HeaderMap,
         crypto_negociation: Json<model::CryptoNegociation>,
     ) -> impl IntoResponse {
         if let Err(e) = crypto_negociation.verify() {
@@ -198,21 +222,8 @@ mod missions {
         ) {
             Ok(Some(agent)) => agent,
             Ok(None) => {
-                match services::agents::create(
-                    c2_state.conn.clone(),
-                    "Unnamed agent",
-                    crypto_negociation.identity.to_bytes(),
-                    headers
-                        .get(PLATFORM_HEADER)
-                        .and_then(|p| model::Platform::from_str(p.to_str().unwrap()).ok())
-                        .unwrap_or(model::Platform::Unix),
-                ) {
-                    Ok(agent) => agent,
-                    Err(e) => {
-                        error!("{e}");
-                        return (StatusCode::INTERNAL_SERVER_ERROR).into_response();
-                    }
-                }
+                warn!("Agent not found");
+                return (StatusCode::NOT_FOUND, AGENT_NOT_FOUND).into_response();
             }
             Err(e) => {
                 error!("{e}");

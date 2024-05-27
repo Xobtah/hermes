@@ -60,8 +60,8 @@ async fn main() -> C2Result<()> {
     conn.execute(
         "CREATE TABLE IF NOT EXISTS agents (
         id INTEGER PRIMARY KEY,
-        name TEXT NOT NULL,
-        identity BLOB NOT NULL,
+        name TEXT UNIQUE NOT NULL,
+        identity BLOB UNIQUE NOT NULL,
         platform TEXT NOT NULL,
         created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
         last_seen_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP

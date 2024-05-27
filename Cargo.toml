@@ -19,7 +19,7 @@ chacha20poly1305 = { version = "0.10.1", default-features = false, features = ["
 chrono = { version = "0.4.38", default-features = false, features = ["serde"] }
 common = { path = "common", default-features = false }
 dialoguer = { version = "0.11", default-features = false, features = ["fuzzy-select"] }
-dirs = { version = "5.0.1", default-features = false }
+# dirs = { version = "5.0.1", default-features = false }
 ed25519-dalek = { version = "2.1.1", default-features = false, features = ["rand_core", "serde"] }
 env_logger = { version = "0.11.3", default-features = false, features = ["auto-color", "humantime"] }
 futures = { version = "0.3.30", default-features = false }

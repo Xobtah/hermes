@@ -26,6 +26,7 @@ To run `hermes`, follow these steps:
 ## TODO
 * **Telegram as a proxy:** Send encrypted messages to a Telegram bot.
 * **Tor as a proxy:** Send the HTTP requests through a SOCKS5 proxy.
+* **Write tests**
 
 ## Contributing
 Contributions to fetish2 are welcome! To contribute:

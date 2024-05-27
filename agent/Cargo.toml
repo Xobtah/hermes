@@ -3,6 +3,9 @@ name = "agent"
 version = "0.1.0"
 edition = "2021"
 
+[build-dependencies]
+common = { workspace = true }
+
 [dependencies]
 # anyhow = { workspace = true }
 base64 = { workspace = true }
@@ -12,7 +15,7 @@ env_logger = { workspace = true }
 common = { workspace = true }
 # futures = { workspace = true }
 # hyper = { workspace = true }
-dirs = { workspace = true }
+# dirs = { workspace = true }
 libc = { workspace = true }
 log = { workspace = true }
 self-replace = { workspace = true }

