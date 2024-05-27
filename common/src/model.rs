@@ -1,4 +1,7 @@
-use std::{fmt, str::FromStr};
+use std::{
+    fmt::{self, Display},
+    str::FromStr,
+};
 
 use serde::{Deserialize, Serialize};
 
@@ -14,6 +17,13 @@ pub struct Agent {
     pub created_at: chrono::DateTime<chrono::Utc>,
     #[serde(rename = "lastSeenAt")]
     pub last_seen_at: chrono::DateTime<chrono::Utc>,
+}
+
+// TODO https://crates.io/crates/timeago
+impl Display for Agent {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Agent [{}]: {} ({})", self.id, self.name, self.platform)
+    }
 }
 
 impl Agent {
@@ -49,9 +59,12 @@ pub enum Platform {
     Windows,
 }
 
-impl ToString for Platform {
-    fn to_string(&self) -> String {
-        serde_json::to_string(self).unwrap()
+impl Display for Platform {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Platform::Unix => write!(f, "Unix"),
+            Platform::Windows => write!(f, "Windows"),
+        }
     }
 }
 

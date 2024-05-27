@@ -23,91 +23,45 @@ const PLATFORMS: &[Item<model::Platform, fn() -> model::Platform>] = &[
     Item::new("Windows", || model::Platform::Windows),
 ];
 
-const COMMANDS: &[Item<ClientResult<()>, fn() -> ClientResult<()>>] = &[
-    Item::new("Issue mission", || {
-        let agents = client::list_agents()?;
-
-        let Some(agent) = utils::select_agent(&agents)? else {
-            println!("No agent selected");
-            return Ok(());
-        };
-
-        let Some(task) = Selection::from(TASKS).select("Select a task")? else {
-            println!("No task selected");
-            return Ok(());
-        };
-
-        let mission = client::issue_mission(agent.id, task)?;
-        loop {
-            match client::get_mission_result(mission.id) {
-                Ok(Some(result)) => {
-                    println!("{result}");
-                    break Ok(());
-                }
-                Err(e) => eprintln!("{e}"),
-                _ => {}
-            }
-            std::thread::sleep(std::time::Duration::from_secs(1));
-        }
-    }),
-    Item::new("List agents", || {
-        for agent in client::list_agents()? {
-            println!("\t{}", utils::agent_fmt(&agent));
-        }
-        Ok(())
+const MAIN_MENU_COMMANDS: &[Item<
+    ClientResult<Option<Menu>>,
+    fn() -> ClientResult<Option<Menu>>,
+>] = &[
+    Item::new("Select agent", || {
+        Ok(Some(Menu::SelectAgent(client::list_agents()?)))
     }),
     Item::new("Create agent", || {
         let Some(platform) = Selection::from(PLATFORMS).select("Select platform")? else {
             println!("No platform selected");
-            return Ok(());
+            return Ok(None);
         };
 
-        let response = ureq::post("http://localhost:3000/agents").send_json(model::Agent {
-            id: Default::default(),
-            name: utils::prompt("Agent name")?,
-            identity: crypto::VerifyingKey::from_bytes(
+        client::agents::create(
+            utils::prompt("Agent name")?,
+            crypto::VerifyingKey::from_bytes(
                 fs::read(utils::prompt("Agent identity public key file path")?)?
                     .as_slice()
                     .try_into()
                     .unwrap(),
             )
-            .unwrap()
-            .to_bytes(),
+            .unwrap(),
             platform,
-            created_at: Default::default(),
-            last_seen_at: Default::default(),
-        })?;
-
-        if response.status() == 201 {
-            println!("Agent created");
-        } else {
-            eprintln!("Failed to create agent");
-        }
-        Ok(())
+        )?;
+        Ok(None)
     }),
-    Item::new("Update agent name", || {
+    Item::new("Update agent", || {
         let agents = client::list_agents()?;
 
         let Some(agent) = utils::select_agent(&agents)? else {
             println!("No agent selected");
-            return Ok(());
+            return Ok(None);
         };
 
-        let name = utils::prompt("New name")?;
-
-        let response = ureq::put(&format!("http://localhost:3000/agents/{}", agent.id)).send_json(
-            model::Agent {
-                name,
-                ..agent.clone()
-            },
-        )?;
-
-        if response.status() == 200 {
-            println!("Agent name updated");
-        } else {
-            eprintln!("Failed to update agent name");
-        }
-        Ok(())
+        client::agents::update(&model::Agent {
+            name: utils::prompt("New name")?,
+            ..agent.clone()
+        })?;
+        Ok(None)
     }),
     Item::new("Generate identity key pair", || {
         let signing_key = crypto::get_signing_key();
@@ -119,18 +73,77 @@ const COMMANDS: &[Item<ClientResult<()>, fn() -> ClientResult<()>>] = &[
             "[+] Verifying key: {:?}",
             BASE64_STANDARD.encode(signing_key.verifying_key().as_bytes())
         );
-        Ok(())
+        Ok(None)
     }),
 ];
+
+enum Menu {
+    Main,
+    SelectAgent(Vec<model::Agent>),
+    Agent(model::Agent),
+}
+
+impl Menu {
+    fn select(&self) -> Result<Option<ClientResult<Option<Menu>>>, dialoguer::Error> {
+        match self {
+            Menu::Main => Selection::from(MAIN_MENU_COMMANDS).select("Select a command"),
+            Menu::SelectAgent(agents) => {
+                let agents = agents
+                    .clone()
+                    .into_iter()
+                    .map(|agent| (format!("{agent}"), agent))
+                    .collect::<Vec<_>>();
+                let select_agent_commands: Vec<Item<ClientResult<Option<Menu>>, _>> = agents
+                    .iter()
+                    .map(|(name, agent)| Item::new(name, || Ok(Some(Menu::Agent(agent.clone())))))
+                    .collect();
+                Selection::from(&select_agent_commands[..]).select("Select an agent")
+            }
+            Menu::Agent(agent) => {
+                let agent_commands: &[Item<ClientResult<Option<Menu>>, _>] =
+                    &[Item::new("Issue mission", || {
+                        let Some(task) = Selection::from(TASKS).select("Select a task")? else {
+                            println!("No task selected");
+                            return Ok(None);
+                        };
+
+                        let mission = client::issue_mission(agent.id, task)?;
+                        loop {
+                            match client::get_mission_result(mission.id) {
+                                Ok(Some(result)) => {
+                                    println!("{result}");
+                                    break Ok(None);
+                                }
+                                Err(e) => eprintln!("{e}"),
+                                _ => {}
+                            }
+                            std::thread::sleep(std::time::Duration::from_secs(1));
+                        }
+                    })];
+                Selection::from(agent_commands)
+                    .select(&format!("[{}] Select a command", agent.name))
+            }
+        }
+    }
+}
 
 // TODO Make a menu system
 // 1. Select context of an agent
 // 2. CRUD + issue mission
 fn main() -> ClientResult<()> {
-    let selection = Selection::from(COMMANDS);
-    while let Some(result) = selection.select("Select a subcommand")? {
-        if let Err(e) = result {
-            eprintln!("{e}");
+    let mut menu_stack = vec![];
+    menu_stack.push(Menu::Main);
+
+    while let Some(menu) = menu_stack.last() {
+        match menu.select()? {
+            Some(result) => match result {
+                Ok(Some(menu)) => menu_stack.push(menu),
+                Ok(None) => continue,
+                Err(e) => eprintln!("{e}"),
+            },
+            None => {
+                menu_stack.pop();
+            }
         }
     }
     println!("Bye! :)");

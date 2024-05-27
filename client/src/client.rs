@@ -36,3 +36,44 @@ pub fn get_mission_result(mission_id: i32) -> ClientResult<Option<String>> {
         Ok(result)
     }
 }
+
+pub mod agents {
+    use common::{crypto, model};
+
+    use crate::error::ClientResult;
+
+    pub fn create(
+        name: String,
+        identity: crypto::VerifyingKey,
+        platform: model::Platform,
+    ) -> ClientResult<()> {
+        let response = ureq::post("http://localhost:3000/agents").send_json(model::Agent {
+            id: Default::default(),
+            name,
+            identity: identity.to_bytes(),
+            platform,
+            created_at: Default::default(),
+            last_seen_at: Default::default(),
+        })?;
+
+        if response.status() == 201 {
+            println!("Agent created");
+        } else {
+            eprintln!("Failed to create agent");
+        }
+        Ok(())
+    }
+
+    pub fn update(agent: &model::Agent) -> ClientResult<()> {
+        if ureq::put(&format!("http://localhost:3000/agents/{}", agent.id))
+            .send_json(agent)?
+            .status()
+            == 200
+        {
+            println!("Agent name updated");
+        } else {
+            eprintln!("Failed to update agent name");
+        }
+        Ok(())
+    }
+}
