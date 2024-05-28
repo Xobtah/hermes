@@ -127,9 +127,6 @@ impl Menu {
     }
 }
 
-// TODO Make a menu system
-// 1. Select context of an agent
-// 2. CRUD + issue mission
 fn main() -> ClientResult<()> {
     let mut menu_stack = vec![];
     menu_stack.push(Menu::Main);

