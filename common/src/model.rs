@@ -77,6 +77,15 @@ impl FromStr for Platform {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Release {
+    pub checksum: String,
+    pub platform: Platform,
+    pub bytes: Vec<u8>,
+    #[serde(rename = "createdAt")]
+    pub created_at: chrono::DateTime<chrono::Utc>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Mission {
     #[serde(default)]
     pub id: i32,

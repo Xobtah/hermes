@@ -1,17 +1,19 @@
-use common::crypto;
+use common::{client, crypto};
 
 #[derive(thiserror::Error, Debug)]
 pub enum AgentError {
-    #[error("crypto error: {0}")]
+    #[error("Crypto error: {0}")]
     Crypto(#[from] crypto::CryptoError),
-    #[error("http error: {0}")]
+    #[error("HTTP error: {0}")]
     Http(#[from] ureq::Error),
-    #[error("json error: {0}")]
+    #[error("JSON error: {0}")]
     Json(#[from] serde_json::Error),
-    #[error("io error: {0}")]
+    #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
-    #[error("utf8 error: {0}")]
+    #[error("Utf8 error: {0}")]
     Utf8(#[from] std::str::Utf8Error),
-    #[error("base64 error: {0}")]
+    #[error("Base64 error: {0}")]
     Base64(#[from] base64::DecodeError),
+    #[error("Client error: {0}")]
+    Client(#[from] client::ClientError),
 }

@@ -1,8 +1,10 @@
+use std::path::Path;
+
 use common::model;
 
 use crate::error::ClientResult;
 
-pub fn prompt(prompt: &str) -> Result<String, dialoguer::Error> {
+pub fn prompt<S: Into<String>>(prompt: S) -> Result<String, dialoguer::Error> {
     dialoguer::Input::with_theme(&dialoguer::theme::ColorfulTheme::default())
         .with_prompt(prompt)
         .interact_text()
@@ -23,4 +25,10 @@ pub fn select_agent(agents: &[model::Agent]) -> ClientResult<Option<&model::Agen
             .interact_opt()?
             .and_then(|i| agents.get(i)),
     )
+}
+
+pub fn checksum<P: AsRef<Path>>(path: P) -> ClientResult<String> {
+    Ok(sha256::digest(
+        std::fs::read(path)?.as_slice(),
+    ))
 }

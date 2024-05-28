@@ -9,9 +9,12 @@ blake2 = { workspace = true }
 chacha20poly1305 = { workspace = true }
 chrono = { workspace = true }
 ed25519-dalek = { workspace = true }
+log = { workspace = true }
 rand = { workspace = true }
+rust-lzma = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
+ureq = { workspace = true }
 x25519-dalek = { workspace = true }
 zeroize = { workspace = true }

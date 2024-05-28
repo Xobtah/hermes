@@ -1,11 +1,10 @@
 use std::fs;
 
 use base64::{prelude::BASE64_STANDARD, Engine as _};
-use common::{crypto, model};
+use common::{client, crypto, model};
 use error::ClientResult;
 use selection::{Item, Selection};
 
-mod client;
 mod error;
 mod selection;
 mod utils;
@@ -28,7 +27,7 @@ const MAIN_MENU_COMMANDS: &[Item<
     fn() -> ClientResult<Option<Menu>>,
 >] = &[
     Item::new("Select agent", || {
-        Ok(Some(Menu::SelectAgent(client::list_agents()?)))
+        Ok(Some(Menu::SelectAgent(client::agents::get()?)))
     }),
     Item::new("Create agent", || {
         let Some(platform) = Selection::from(PLATFORMS).select("Select platform")? else {
@@ -50,7 +49,7 @@ const MAIN_MENU_COMMANDS: &[Item<
         Ok(None)
     }),
     Item::new("Update agent", || {
-        let agents = client::list_agents()?;
+        let agents = client::agents::get()?;
 
         let Some(agent) = utils::select_agent(&agents)? else {
             println!("No agent selected");
@@ -61,6 +60,25 @@ const MAIN_MENU_COMMANDS: &[Item<
             name: utils::prompt("New name")?,
             ..agent.clone()
         })?;
+        Ok(None)
+    }),
+    Item::new("Create release", || {
+        let Some(platform) = Selection::from(PLATFORMS).select("Select platform")? else {
+            println!("No platform selected");
+            return Ok(None);
+        };
+
+        let path = match platform {
+            model::Platform::Unix => "target/release/agent",
+            model::Platform::Windows => "target/x86_64-pc-windows-gnu/release/agent.exe",
+        };
+
+        client::releases::create(
+            &utils::checksum(path)?,
+            platform,
+            &common::compress(&fs::read(path)?),
+            // &vec![],
+        )?;
         Ok(None)
     }),
     Item::new("Generate identity key pair", || {
@@ -107,9 +125,9 @@ impl Menu {
                             return Ok(None);
                         };
 
-                        let mission = client::issue_mission(agent.id, task)?;
+                        let mission = client::missions::issue(agent.id, task)?;
                         loop {
-                            match client::get_mission_result(mission.id) {
+                            match client::missions::get_result(mission.id) {
                                 Ok(Some(result)) => {
                                     println!("{result}");
                                     break Ok(None);

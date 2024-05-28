@@ -70,6 +70,16 @@ async fn main() -> C2Result<()> {
     )?;
 
     conn.execute(
+        "CREATE TABLE IF NOT EXISTS releases (
+        checksum TEXT PRIMARY KEY,
+        platform TEXT NOT NULL,
+        bytes BLOB NOT NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )",
+        [],
+    )?;
+
+    conn.execute(
         "CREATE TABLE IF NOT EXISTS missions (
         id INTEGER PRIMARY KEY,
         agent_id INTEGER NOT NULL,

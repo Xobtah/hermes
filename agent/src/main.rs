@@ -4,7 +4,7 @@ use std::{env, fs, path::Path, thread, time};
 // use arti_client::{TorClient, TorClientConfig};
 // use arti_hyper::ArtiHttpConnector;
 use base64::{prelude::BASE64_STANDARD, Engine as _};
-use common::{crypto, model};
+use common::{client, crypto, model};
 use log::{error, info};
 // use futures::{Stream, StreamExt};
 // use hyper::Body;
@@ -74,7 +74,6 @@ use log::{error, info};
 //     Ok(())
 // }
 
-mod client;
 mod error;
 mod platform;
 

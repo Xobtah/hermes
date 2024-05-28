@@ -1,3 +1,4 @@
+// TODO Instead of &'a str use <S: Into<String>>
 pub struct Item<'a, T, F>
 where
     F: Fn() -> T,
