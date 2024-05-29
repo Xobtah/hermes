@@ -60,12 +60,12 @@ const MAIN_MENU_COMMANDS: &[Item<
     }),
 ];
 
-const AGENT_COMMANDS: fn(
-    model::Agent,
+const AGENT_COMMANDS: for<'a> fn(
+    &'a model::Agent,
 ) -> [Item<
     &'static str,
     ClientResult<Option<Menu>>,
-    Box<dyn Fn() -> ClientResult<Option<Menu>>>,
+    Box<dyn 'a + Fn() -> ClientResult<Option<Menu>>>,
 >; 4] = |agent| {
     [
         Item::new(
@@ -164,7 +164,7 @@ impl Menu {
                     &str,
                     Result<Option<Menu>, error::ClientError>,
                     Box<dyn Fn() -> Result<Option<Menu>, error::ClientError>>,
-                >; 4] = AGENT_COMMANDS(agent.clone()); // TODO No clone
+                >; 4] = AGENT_COMMANDS(agent);
                 Selection::from(&commands[..]).select(&format!("[{}] Select a mission", agent.name))
             }
         }

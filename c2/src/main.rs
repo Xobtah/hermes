@@ -59,7 +59,7 @@ async fn main() -> C2Result<()> {
 
     let conn = rusqlite::Connection::open("c2.db")?;
 
-    // TODO Make migration script
+    // TODO Make migration https://github.com/launchbadge/sqlx/blob/main/sqlx-cli/README.md
     conn.execute("PRAGMA foreign_keys = ON", [])?;
 
     conn.execute(

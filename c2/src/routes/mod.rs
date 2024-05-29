@@ -16,10 +16,9 @@ mod missions;
 pub const AGENT_NOT_FOUND: &str = "Agent not found.";
 pub const MISSION_NOT_FOUND: &str = "Mission not found.";
 
-// TODO Either encrypt all routes or listen on a different interface for admin routes
 // TODO Try to propagate errors using impl IntoResponse for better error handling
 
-// TODO Fix access & permissions
+// TODO Fix access & permissions, encrypt all routes or listen on a different interface for admin routes or something else
 pub fn init_router() -> Router<C2State> {
     Router::new()
         .route("/crypto/:mission_id", get(get_crypto))
