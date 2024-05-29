@@ -16,6 +16,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 sha256 = { workspace = true }
 thiserror = { workspace = true }
+timeago = { workspace = true }
 ureq = { workspace = true }
 x25519-dalek = { workspace = true }
 zeroize = { workspace = true }

@@ -19,10 +19,17 @@ pub struct Agent {
     pub last_seen_at: chrono::DateTime<chrono::Utc>,
 }
 
-// TODO https://crates.io/crates/timeago
 impl Display for Agent {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Agent [{}]: {} ({})", self.id, self.name, self.platform)
+        let timeago = timeago::Formatter::new();
+        write!(
+            f,
+            "Agent [{}]: {} ({}) {}",
+            self.id,
+            self.name,
+            self.platform,
+            timeago.convert_chrono(self.last_seen_at, chrono::offset::Utc::now())
+        )
     }
 }
 

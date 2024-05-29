@@ -77,6 +77,16 @@ pub fn get_by_identity(
         ).optional()
 }
 
+pub fn seen(conn: ThreadSafeConnection, id: i32) -> C2Result<()> {
+    debug!("Updating agent {} last seen at", id);
+    let conn = conn.lock().unwrap();
+    conn.execute(
+        "UPDATE agents SET last_seen_at = CURRENT_TIMESTAMP WHERE id = ?1",
+        [id],
+    )?;
+    Ok(())
+}
+
 pub fn update_by_id(conn: ThreadSafeConnection, agent: &model::Agent) -> C2Result<Agent> {
     debug!("Updating agent {} name", agent.id);
     let conn = conn.lock().unwrap();

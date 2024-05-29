@@ -46,6 +46,11 @@ pub async fn get_next(
             }
         };
 
+    if let Err(e) = services::agents::seen(c2_state.conn.clone(), agent.id) {
+        error!("{e}");
+        return (StatusCode::INTERNAL_SERVER_ERROR).into_response();
+    }
+
     let mission = match services::missions::poll_next(c2_state.conn.clone(), agent.id).await {
         Ok(Some(m)) => m,
         Ok(None) => {
@@ -127,6 +132,11 @@ pub async fn report(
     if let Err(e) = crypto_message.verify(&agent.identity) {
         error!("{e}");
         return (StatusCode::UNAUTHORIZED).into_response();
+    }
+
+    if let Err(e) = services::agents::seen(c2_state.conn.clone(), agent.id) {
+        error!("{e}");
+        return (StatusCode::INTERNAL_SERVER_ERROR).into_response();
     }
 
     let Some(private_key) = c2_state
