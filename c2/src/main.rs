@@ -34,6 +34,11 @@ pub type ThreadSafeConnection = Arc<Mutex<rusqlite::Connection>>;
 async fn main() -> C2Result<()> {
     tracing_subscriber::fmt()
         .with_max_level(tracing::Level::DEBUG)
+        .event_format(
+            tracing_subscriber::fmt::format()
+                .with_file(true)
+                .with_line_number(true),
+        )
         .init();
     info!(" ░▒▓██████▓▒░░▒▓███████▓▒░ ");
     info!("░▒▓█▓▒░░▒▓█▓▒░      ░▒▓█▓▒░");
@@ -65,16 +70,6 @@ async fn main() -> C2Result<()> {
         platform TEXT NOT NULL,
         created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
         last_seen_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-    )",
-        [],
-    )?;
-
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS releases (
-        checksum TEXT PRIMARY KEY,
-        platform TEXT NOT NULL,
-        bytes BLOB NOT NULL,
-        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
     )",
         [],
     )?;

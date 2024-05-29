@@ -1,39 +1,42 @@
-// TODO Instead of &'a str use <S: Into<String>>
-pub struct Item<'a, T, F>
+pub struct Item<S: AsRef<str>, T, F>
 where
     F: Fn() -> T,
 {
-    pub name: &'a str,
-    pub action: F,
+    pub name: S,
+    pub command: F,
 }
 
-impl<'a, T, F> Item<'a, T, F>
+impl<S, T, F> Item<S, T, F>
 where
+    S: AsRef<str>,
     F: Fn() -> T,
 {
-    pub const fn new(name: &'a str, action: F) -> Self {
-        Self { name, action }
+    pub const fn new(name: S, command: F) -> Self {
+        Self { name, command }
     }
 }
 
-pub struct Selection<'a, T, F>
+pub struct Selection<'a, S, T, F>
 where
+    S: AsRef<str>,
     F: Fn() -> T,
 {
-    pub actions: &'a [Item<'a, T, F>],
+    pub actions: &'a [Item<S, T, F>],
 }
 
-impl<'a, T, F> From<&'a [Item<'a, T, F>]> for Selection<'a, T, F>
+impl<'a, S, T, F> From<&'a [Item<S, T, F>]> for Selection<'a, S, T, F>
 where
+    S: AsRef<str>,
     F: Fn() -> T,
 {
-    fn from(value: &'a [Item<'a, T, F>]) -> Self {
-        Self { actions: value }
+    fn from(actions: &'a [Item<S, T, F>]) -> Self {
+        Self { actions }
     }
 }
 
-impl<'a, T, F> Selection<'a, T, F>
+impl<'a, S, T, F> Selection<'a, S, T, F>
 where
+    S: AsRef<str> + std::fmt::Display,
     F: Fn() -> T,
 {
     pub fn select(&self, prompt: &str) -> Result<Option<T>, dialoguer::Error> {
@@ -46,7 +49,7 @@ where
                 .and_then(|i| {
                     self.actions
                         .get(i)
-                        .and_then(|action| Some((action.action)()))
+                        .and_then(|action| Some((action.command)()))
                 }),
         )
     }

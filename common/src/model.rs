@@ -11,7 +11,7 @@ use crate::crypto;
 pub struct Agent {
     pub id: i32,
     pub name: String,
-    pub identity: [u8; ed25519_dalek::PUBLIC_KEY_LENGTH],
+    pub identity: crypto::VerifyingKey,
     pub platform: Platform,
     #[serde(rename = "createdAt")]
     pub created_at: chrono::DateTime<chrono::Utc>,
@@ -69,17 +69,21 @@ impl Display for Platform {
 }
 
 impl FromStr for Platform {
-    type Err = serde_json::Error;
+    type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        serde_json::from_str(s)
+        match s {
+            "Unix" => Ok(Platform::Unix),
+            "Windows" => Ok(Platform::Windows),
+            _ => Err(format!("Invalid platform '{s}'")),
+        }
     }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Release {
     pub checksum: String,
-    pub platform: Platform,
+    pub verifying_key: crypto::VerifyingKey,
     pub bytes: Vec<u8>,
     #[serde(rename = "createdAt")]
     pub created_at: chrono::DateTime<chrono::Utc>,
@@ -105,7 +109,7 @@ impl fmt::Display for Mission {
             "Mission [{}]: {:?}",
             self.id,
             match &self.task {
-                Task::Update(bin) => format!("Update {} bytes", bin.len()),
+                Task::Update(release) => format!("Update {} compressed bytes", release.bytes.len()),
                 Task::Execute(cmd) => format!("Execute '{cmd}'"),
                 Task::Stop => "Stop".to_owned(),
             }
@@ -115,7 +119,7 @@ impl fmt::Display for Mission {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum Task {
-    Update(Vec<u8>),
+    Update(Release),
     Execute(String),
     Stop,
 }

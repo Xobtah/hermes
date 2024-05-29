@@ -1,3 +1,5 @@
+use std::path::Path;
+
 pub mod client;
 pub mod crypto;
 pub mod model;
@@ -7,6 +9,10 @@ pub const PLATFORM: model::Platform = model::Platform::Unix;
 #[cfg(windows)]
 pub const PLATFORM: model::Platform = model::Platform::Windows;
 pub const PLATFORM_HEADER: &str = "Platform";
+
+pub fn checksum<P: AsRef<Path>>(path: P) -> Result<String, std::io::Error> {
+    Ok(sha256::digest(std::fs::read(path)?.as_slice()))
+}
 
 // TODO Doesn't look good
 pub fn compress(data: &[u8]) -> Vec<u8> {

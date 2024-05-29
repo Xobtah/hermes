@@ -14,6 +14,7 @@ rand = { workspace = true }
 rust-lzma = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+sha256 = { workspace = true }
 thiserror = { workspace = true }
 ureq = { workspace = true }
 x25519-dalek = { workspace = true }

