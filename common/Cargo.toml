@@ -3,6 +3,9 @@ name = "common"
 version = "0.1.0"
 edition = "2021"
 
+[target.'cfg(unix)'.dependencies]
+rust-lzma = { workspace = true }
+
 [dependencies]
 base64 = { workspace = true }
 blake2 = { workspace = true }
@@ -11,7 +14,6 @@ chrono = { workspace = true }
 ed25519-dalek = { workspace = true }
 log = { workspace = true }
 rand = { workspace = true }
-rust-lzma = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha256 = { workspace = true }

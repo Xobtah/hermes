@@ -109,13 +109,6 @@ const AGENT_COMMANDS: for<'a> fn(
         Item::new(
             "Update agent data",
             Box::new(|| {
-                let agents = client::agents::get()?;
-
-                let Some(agent) = utils::select_agent(&agents)? else {
-                    println!("No agent selected");
-                    return Ok(None);
-                };
-
                 client::agents::update(&model::Agent {
                     name: utils::prompt("Agent name", Some(agent.name.clone()))?,
                     identity: crypto::VerifyingKey::from_bytes(
