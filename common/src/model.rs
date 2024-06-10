@@ -60,8 +60,9 @@ impl Agent {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Default, Serialize, Deserialize, Copy, Clone, PartialEq, Eq)]
 pub enum Platform {
+    #[default]
     Unix,
     Windows,
 }

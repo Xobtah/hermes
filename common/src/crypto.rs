@@ -7,10 +7,11 @@ use zeroize::Zeroize;
 
 pub use ed25519_dalek::{Signature, SigningKey, VerifyingKey};
 
-const X25519_PUBLIC_KEY_SIZE: usize = 32;
-const X25519_PRIVATE_KEY_SIZE: usize = 32;
-const XCHACHA20_POLY1305_NONCE_SIZE: usize = 24;
-const XCHACHA20_POLY1305_KEY_SIZE: usize = 32;
+pub const ED25519_SECRET_KEY_SIZE: usize = ed25519_dalek::SECRET_KEY_LENGTH;
+pub const X25519_PUBLIC_KEY_SIZE: usize = 32;
+pub const X25519_PRIVATE_KEY_SIZE: usize = 32;
+pub const XCHACHA20_POLY1305_NONCE_SIZE: usize = 24;
+pub const XCHACHA20_POLY1305_KEY_SIZE: usize = 32;
 
 #[derive(thiserror::Error, Debug)]
 pub enum CryptoError {

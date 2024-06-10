@@ -3,6 +3,10 @@ name = "c2"
 version = "0.1.0"
 edition = "2021"
 
+[dev-dependencies]
+tower = { workspace = true }
+http-body-util = { workspace = true }
+
 [dependencies]
 axum = { workspace = true }
 base64 = { workspace = true }

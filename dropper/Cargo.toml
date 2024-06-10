@@ -1,0 +1,13 @@
+[package]
+name = "dropper"
+version = "0.1.0"
+edition = "2021"
+
+[build-dependencies]
+winres = { workspace = true }
+
+[dependencies]
+common = { workspace = true }
+memmap2 = { workspace = true }
+object = { workspace = true }
+self-replace = { workspace = true }

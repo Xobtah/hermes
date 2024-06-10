@@ -14,7 +14,7 @@ pub fn checksum<P: AsRef<Path>>(path: P) -> Result<String, std::io::Error> {
     Ok(sha256::digest(std::fs::read(path)?.as_slice()))
 }
 
-// TODO Doesn't look good
+// TODO Make a compression work on Windows
 #[cfg(unix)]
 pub fn compress(data: &[u8]) -> Vec<u8> {
     // let mut encoder = zstd::Encoder::new(Vec::new(), 0).unwrap();

@@ -1,10 +1,11 @@
-use std::env;
-use std::fs;
-use std::path::Path;
-
-use common::crypto;
-
+#[cfg(not(windows))]
 fn main() {
+    use std::env;
+    use std::fs;
+    use std::path::Path;
+
+    use common::crypto;
+
     let signing_key = crypto::get_signing_key();
     let target_dir = env::var_os("OUT_DIR").unwrap();
     fs::write(

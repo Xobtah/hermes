@@ -107,3 +107,9 @@ pub fn update_by_id(conn: ThreadSafeConnection, agent: &model::Agent) -> C2Resul
         row_to_agent,
     )?)
 }
+
+pub fn delete_by_id(conn: ThreadSafeConnection, id: i32) -> C2Result<bool> {
+    debug!("Deleting agent {id}");
+    let conn = conn.lock().unwrap();
+    Ok(conn.execute("DELETE FROM agents WHERE id = ?1", [id])? == 1)
+}

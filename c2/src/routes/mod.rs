@@ -25,10 +25,10 @@ pub fn init_router() -> Router<C2State> {
         .nest(
             "/agents",
             Router::new()
-                .route("/", post(agents::create).get(agents::get))
+                .route("/", /*post(agents::create).*/ get(agents::get))
                 .nest(
                     "/:agent_id",
-                    Router::new().route("/", put(agents::update)), // .route("/update", put(agents::update_bin)),
+                    Router::new().route("/", put(agents::update).delete(agents::delete)),
                 ),
         )
         .nest(

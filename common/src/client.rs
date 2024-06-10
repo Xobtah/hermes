@@ -64,6 +64,19 @@ pub mod agents {
         }
         Ok(())
     }
+
+    pub fn delete(agent_id: i32) -> ClientResult<()> {
+        if ureq::delete(&format!("{C2_URL}/agents/{agent_id}"))
+            .call()?
+            .status()
+            == 200
+        {
+            println!("Agent deleted");
+        } else {
+            eprintln!("Failed to delete agent");
+        }
+        Ok(())
+    }
 }
 
 pub mod missions {

@@ -9,10 +9,10 @@ mod error;
 mod selection;
 mod utils;
 
-const PLATFORMS: &[Item<&str, model::Platform, fn() -> model::Platform>] = &[
-    Item::new("Unix", || model::Platform::Unix),
-    Item::new("Windows", || model::Platform::Windows),
-];
+// const PLATFORMS: &[Item<&str, model::Platform, fn() -> model::Platform>] = &[
+//     Item::new("Unix", || model::Platform::Unix),
+//     Item::new("Windows", || model::Platform::Windows),
+// ];
 
 const MAIN_MENU_COMMANDS: &[Item<
     &str,
@@ -25,28 +25,36 @@ const MAIN_MENU_COMMANDS: &[Item<
             println!("No agents available");
             return Ok(None);
         }
-        Ok(Some(Menu::SelectAgent(client::agents::get()?)))
+        Ok(Some(Menu::SelectAgent))
     }),
-    Item::new("Create agent", || {
-        let Some(platform) = Selection::from(PLATFORMS).select("Select platform")? else {
-            println!("No platform selected");
+    // Item::new("Create agent", || {
+    //     let Some(platform) = Selection::from(PLATFORMS).select("Select platform")? else {
+    //         println!("No platform selected");
+    //         return Ok(None);
+    //     };
+
+    //     client::agents::create(
+    //         utils::prompt("Agent name", None)?,
+    //         crypto::VerifyingKey::from_bytes(
+    //             fs::read(utils::prompt("Agent identity public key file path", None)?)?
+    //                 .as_slice()
+    //                 .try_into()
+    //                 .unwrap(),
+    //         )
+    //         .unwrap(),
+    //         platform,
+    //     )?;
+    //     Ok(None)
+    // }),
+    Item::new("Delete agent", || {
+        let Some(agent) = utils::select_agent()? else {
+            println!("No agent selected");
             return Ok(None);
         };
-
-        client::agents::create(
-            utils::prompt("Agent name", None)?,
-            crypto::VerifyingKey::from_bytes(
-                fs::read(utils::prompt("Agent identity public key file path", None)?)?
-                    .as_slice()
-                    .try_into()
-                    .unwrap(),
-            )
-            .unwrap(),
-            platform,
-        )?;
+        client::agents::delete(agent.id)?;
         Ok(None)
     }),
-    Item::new("Generate identity key pair", || {
+    Item::new("[dbg] Generate identity key pair", || {
         let signing_key = crypto::get_signing_key();
         println!(
             "[+] Signing key: {:?}",
@@ -56,6 +64,17 @@ const MAIN_MENU_COMMANDS: &[Item<
             "[+] Verifying key: {:?}",
             BASE64_STANDARD.encode(signing_key.verifying_key().as_bytes())
         );
+        Ok(None)
+    }),
+    Item::new("[dbg] Generate crypto negociation", || {
+        let mut signing_key = crypto::get_signing_key();
+        let (private_key, crypto_negociation) = model::CryptoNegociation::new(&mut signing_key);
+        println!(
+            "[+] Signing key: {:?}",
+            BASE64_STANDARD.encode(signing_key.as_bytes())
+        );
+        println!("[+] Private key: {:?}", BASE64_STANDARD.encode(private_key));
+        println!("[+] Crypto negociation: {}", serde_json::to_string(&crypto_negociation)?);
         Ok(None)
     }),
 ];
@@ -136,7 +155,7 @@ const AGENT_COMMANDS: for<'a> fn(
 
 enum Menu {
     Main,
-    SelectAgent(Vec<model::Agent>),
+    SelectAgent,
     Agent(model::Agent),
 }
 
@@ -145,8 +164,8 @@ impl Menu {
     fn select(&self) -> Result<Option<ClientResult<Option<Menu>>>, dialoguer::Error> {
         match self {
             Menu::Main => Selection::from(MAIN_MENU_COMMANDS).select("Select a command"),
-            Menu::SelectAgent(agents) => {
-                if let Some(agent) = utils::select_agent(&agents)? {
+            Menu::SelectAgent => {
+                if let Ok(Some(agent)) = utils::select_agent() {
                     Ok(Some(Ok(Some(Menu::Agent(agent)))))
                 } else {
                     Ok(None)
