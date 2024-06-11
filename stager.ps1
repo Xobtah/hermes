@@ -1,3 +1,7 @@
+# Enabling execution of PS1 scripts: https://stackoverflow.com/questions/4037939/powershell-says-execution-of-scripts-is-disabled-on-this-system
+# Set-ExecutionPolicy RemoteSigned
+# Set-ExecutionPolicy Restricted
+
 if (-NOT ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")) {
     Write-Warning "You do not have Administrator rights to run this script! Please re-run this script as Administrator!"
     Break

@@ -79,9 +79,10 @@ fn app(state: C2State) -> axum::Router {
         .with_state(state)
 }
 
+// TODO Explore https://github.com/tokio-rs/axum/discussions/555
 #[cfg(test)]
 mod tests {
-    use std::sync::Once;
+    use std::{fs, sync::Once};
 
     use super::*;
     use axum::{
@@ -112,38 +113,9 @@ mod tests {
             crypto::get_signing_key_from(BASE64_STANDARD.decode(IDENTITY)?.as_slice().try_into()?);
 
         let conn = rusqlite::Connection::open_in_memory()?;
-
-        conn.execute("PRAGMA foreign_keys = ON", [])?;
-
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS agents (
-        id INTEGER PRIMARY KEY,
-        name TEXT UNIQUE NOT NULL,
-        identity BLOB UNIQUE NOT NULL,
-        platform TEXT NOT NULL,
-        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        last_seen_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-    )",
-            [],
-        )?;
-
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS missions (
-        id INTEGER PRIMARY KEY,
-        agent_id INTEGER NOT NULL,
-        task STRING NOT NULL,
-        result STRING,
-        issued_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        completed_at TIMESTAMP,
-        FOREIGN KEY (agent_id) REFERENCES agents (id)
-    )",
-            [],
-        )?;
-
-        // conn.execute(
-        //     &fs::read_to_string("migrations/20240609105900_hello.up.sql")?,
-        //     [],
-        // )?;
+        conn.execute_batch(&fs::read_to_string(
+            "migrations/20240609105900_hello.up.sql",
+        )?)?;
 
         Ok(C2State {
             signing_key,
