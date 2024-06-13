@@ -1,0 +1,18 @@
+[package]
+name = "packer"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "agent-packer"
+path = "src/main.rs"
+
+[build-dependencies]
+common = { workspace = true }
+
+[dependencies]
+common = { workspace = true }
+obfstr = { workspace = true }
+object = { workspace = true }
+rspe = { workspace = true }
+self-replace = { workspace = true }

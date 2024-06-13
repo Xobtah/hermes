@@ -39,3 +39,41 @@ pub fn compress(data: &[u8]) -> Vec<u8> {
 pub fn decompress(data: &[u8]) -> Vec<u8> {
     data.to_vec()
 }
+
+// fn xor(data: &[u8], key: &[u8]) -> Vec<u8> {
+//     data.iter()
+//         .enumerate()
+//         .fold(Vec::with_capacity(data.len()), |mut acc, (i, &byte)| {
+//             acc.push(byte ^ key[i % key.len()]);
+//             acc
+//         })
+// }
+
+// pub fn pack(data: &[u8], key: &[u8]) -> Vec<u8> {
+//     xor(data, key)
+// }
+
+// pub fn unpack(data: &[u8], key: &[u8]) -> Vec<u8> {
+//     xor(data, key)
+// }
+
+fn xor<'a>(data: &'a mut [u8], key: &[u8]) -> &'a mut [u8] {
+    data.iter_mut()
+        .enumerate()
+        .for_each(|(i, byte)| *byte = *byte ^ key[i % key.len()]);
+    data
+}
+
+pub fn pack<'a>(data: &'a mut [u8], key: &[u8]) -> &'a mut [u8] {
+    xor(data, key)
+}
+
+pub fn unpack<'a>(data: &'a mut [u8], key: &[u8]) -> &'a mut [u8] {
+    xor(data, key)
+}
+
+pub fn unpack_clone<'a>(data: &[u8], key: &[u8]) -> Vec<u8> {
+    let mut data = data.to_vec();
+    xor(data.as_mut_slice(), key);
+    data
+}

@@ -1,12 +1,6 @@
 [workspace]
-members = ["agent", "c2", "client", "common", "dropper",]
+members = ["agent", "c2", "client", "common", "packer",]
 resolver = "2"
-
-# [profile.release]
-# opt-level = "s"
-# lto = true
-# codegen-units = 1
-# strip = "symbols"
 
 [profile.release]
 opt-level = "z"
@@ -34,7 +28,6 @@ http-body-util = { version = "0.1.1", default-features = false }
 # hyper = { version = "0.14", default-features = false, features = ["http1", "client", "runtime"] }
 libc = { version = "0.2.80", default-features = false }
 log = { version = "0.4.21", default-features = false }
-# memmap2 = { version = "0.9.4", default-features = false }
 obfstr = { version = "0.4.3", default-features = false }
 object = { version = "0.36.0", default-features = false, features = ["read", "compression"] }
 rand = { version = "0.8.5", default-features = false, features = ["getrandom"] }
