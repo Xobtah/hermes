@@ -80,7 +80,7 @@ mod platform;
 type AgentResult<T> = Result<T, error::AgentError>;
 
 #[cfg(windows)]
-#[link_section = "secret_key"]
+#[link_section = ".sk"]
 #[used]
 static mut SECRET_KEY: [u8; crypto::ED25519_SECRET_KEY_SIZE] = [0; crypto::ED25519_SECRET_KEY_SIZE];
 

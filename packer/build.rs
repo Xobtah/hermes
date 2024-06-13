@@ -1,7 +1,7 @@
 use std::{env, fs, path::Path};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    println!("cargo:rerun-if-changed=build.rs");
+    println!("cargo:rerun-if-changed=.");
     let xor_key = "ABCDEFGHIKLMNOPQRSTVXYZ"; // TODO Generate random key
 
     #[cfg(debug_assertions)]

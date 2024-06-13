@@ -12,7 +12,7 @@ static mut KEYGEN: bool = true;
 
 #[link_section = "bin"]
 #[used]
-static BYTES: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/agent_xor")); // Reference stored in the .bin, data stored in .rdata
+static mut BYTES: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/agent_xor")); // Reference stored in .bin, data stored in .rdata
 static XOR_KEY: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/xor_key"));
 
 fn section_file_range(file: &PeFile<ImageNtHeaders64>, name: &str) -> Option<(u64, u64)> {
@@ -54,8 +54,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             let agent_clone = agent_slice.to_vec();
             let agent_pe = PeFile::<ImageNtHeaders64>::parse(&agent_clone)?;
-            let (offset, size) =
-                section_file_range(&agent_pe, obfstr::obfstr!("secret_key")).unwrap();
+            let (offset, size) = section_file_range(&agent_pe, obfstr::obfstr!(".sk")).unwrap();
             agent_slice[offset as usize..][..size as usize]
                 .copy_from_slice(crypto::get_signing_key().as_bytes());
             common::pack(agent_slice, XOR_KEY);
