@@ -26,7 +26,10 @@ fn section_file_range(file: &PeFile<ImageNtHeaders64>, name: &str) -> Option<(u6
 }
 
 fn rva_to_file_offset(file: &PeFile<ImageNtHeaders64>, rva: u64) -> u64 {
-    let section_header = file.section_by_name(".rdata").unwrap().pe_section();
+    let section_header = file
+        .section_by_name(obfstr::obfstr!(".rdata"))
+        .unwrap()
+        .pe_section();
     let rdata_va = section_header.virtual_address.get(LittleEndian);
     let rdata_raw_addr = section_header.pointer_to_raw_data.get(LittleEndian);
     let base = file.relative_address_base();

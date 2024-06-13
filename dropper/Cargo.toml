@@ -3,17 +3,8 @@ name = "dropper"
 version = "0.1.0"
 edition = "2021"
 
-[[bin]]
-name = "packer"
-path = "src/packer.rs"
-
 [build-dependencies]
-winres = { workspace = true }
+embed-resource = { workspace = true }
 
 [dependencies]
-common = { workspace = true }
-# memmap2 = { workspace = true }
-object = { workspace = true }
 obfstr = { workspace = true }
-self-replace = { workspace = true }
-rspe = { workspace = true }
