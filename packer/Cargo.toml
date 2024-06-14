@@ -16,3 +16,4 @@ obfstr = { workspace = true }
 object = { workspace = true }
 rspe = { workspace = true }
 self-replace = { workspace = true }
+windows-service = { workspace = true }
