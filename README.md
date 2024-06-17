@@ -3,6 +3,7 @@
 
 ## Features
 * **Perfect Forward Secrecy:** ephemeral shared secrets are renewed after each message sent. This ensures messages can't be decrypted in case of key leak.
+* **Antivirus evasion:** the RAT is undetected by Windows defender, its load is XOR encoded and compressed to avoid detection via static analysis.
 
 ## Configuration
 Before using `hermes`, make sure to configure the following settings:
@@ -18,8 +19,8 @@ To run `hermes`, follow these steps:
 > cd hermes/
 3. Run the c2 server:
 > cargo r --release -p c2
-4. Run the agent:
-> cargo r --release -p agent
+4. Build the agent dropper:
+> just build release # or copy the command from the justfile
 5. Run the client:
 > cargo r --release -p client
 
@@ -30,7 +31,7 @@ To run `hermes`, follow these steps:
 * **Agent update:** Making a guard application that checks the health of the newly updated agent before deleting the previous one, rollback if new agent doesn't work.
 
 ## Contributing
-Contributions to fetish2 are welcome! To contribute:
+Contributions to `hermes` are welcome! To contribute:
 
 1. Fork the repository.
 2. Create a new branch (`git checkout -b feature/your-feature`).
