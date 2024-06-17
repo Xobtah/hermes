@@ -1,6 +1,7 @@
 use std::{env, fs, path::Path};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    println!("cargo::rerun-if-changed=../packer");
     println!("cargo::rerun-if-changed=.");
 
     if env::var_os("CARGO_CFG_WINDOWS").is_some() {
@@ -10,7 +11,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let target = env::var("TARGET").unwrap();
     let host = env::var("HOST").unwrap();
     let profile = env::var("PROFILE").unwrap();
-    let bin_name = "agentp.exe";
+    let bin_name = "stager.exe";
 
     let packer_path = if target == host {
         format!("../target/{profile}/{bin_name}")
@@ -25,6 +26,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let out_dir = env::var_os("OUT_DIR").expect("OUT_DIR env var not set");
     let out_dir = Path::new(&out_dir);
 
-    fs::write(out_dir.join("agentp"), fs::read(packer_path)?)?;
+    fs::write(out_dir.join("stager.exe"), fs::read(packer_path)?)?;
     Ok(())
 }

@@ -1,6 +1,7 @@
 use std::{env, fs, path::Path};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    println!("cargo:rerun-if-changed=../agent");
     println!("cargo:rerun-if-changed=.");
     let xor_key = "ABCDEFGHIKLMNOPQRSTVXYZ"; // TODO Generate random key
 
@@ -23,9 +24,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let mut agent_bin = fs::read(agent_path)?;
-    common::pack(&mut agent_bin, xor_key.as_bytes());
+    let agent_bin = common::pack_to_vec(&mut agent_bin, xor_key.as_bytes());
 
     fs::write(out_dir.join("xor_key"), xor_key.as_bytes())?;
-    fs::write(out_dir.join("agent_xor"), agent_bin)?;
+    fs::write(
+        out_dir.join("agent.exe"),
+        // TODO Try BestSpeed compression
+        [&agent_bin[..], &[0; 64]].concat(), // Padding few bytes because when secret key is set, compressed agent is slightly bigger
+    )?;
     Ok(())
 }

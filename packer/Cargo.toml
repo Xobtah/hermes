@@ -7,6 +7,9 @@ edition = "2021"
 name = "agentp"
 path = "src/main.rs"
 
+[features]
+windows-service = ["dep:windows-service"]
+
 [build-dependencies]
 common = { workspace = true }
 
@@ -16,4 +19,4 @@ obfstr = { workspace = true }
 object = { workspace = true }
 rspe = { workspace = true }
 self-replace = { workspace = true }
-windows-service = { workspace = true }
+windows-service = { workspace = true, optional = true }
