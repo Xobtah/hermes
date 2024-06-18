@@ -93,6 +93,7 @@ fn failsafe_loop(
         if let Some(mission) = client::missions::get_next(signing_key, &c2_verifying_key)? {
             match &mission.task {
                 model::Task::Update(release) => {
+                    // TODO Update should keep same signing key
                     info!("Updating agent '{}'", agent_path.display());
                     if *release.checksum == common::checksum(agent_path)? {
                         info!("Agent is already up to date");

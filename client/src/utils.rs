@@ -24,7 +24,7 @@ pub fn prompt<S: Into<String>>(
 }
 
 pub fn select_agent() -> ClientResult<Option<model::Agent>> {
-    let agents = client::agents::get()?;
+    let agents = client::agents::get(&crate::jwt()?)?;
     if agents.is_empty() {
         println!("No agents available");
         return Ok(None);
@@ -37,8 +37,9 @@ pub fn select_agent() -> ClientResult<Option<model::Agent>> {
 }
 
 pub fn poll_mission_result(mission_id: i32) {
+    let jwt = crate::jwt().unwrap();
     loop {
-        match client::missions::get_result(mission_id) {
+        match client::missions::get_result(&jwt, mission_id) {
             Ok(Some(result)) => {
                 println!("{result}");
                 break;

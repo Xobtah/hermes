@@ -13,7 +13,7 @@ panic = "abort"
 # arti-client = { version = "0.18.0", default-features = false }
 # arti-hyper = { version = "0.18.0", default-features = false }
 axum = { version = "0.7.5", default-features = false, features = ["form", "http1", "json", "matched-path", "original-uri", "query", "tokio", "tower-log", "tracing"] }
-base64 = { version = "0.22.1", default-features = false, features = ["std"] }
+base64 = { version = "0.22.1", default-features = false, features = ["std"] } # TODO Ditch b64 for hex
 blake2 = { version = "0.9.1", default-features = false, features = ["std"] }
 chacha20poly1305 = { version = "0.10.1", default-features = false, features = ["alloc"] }
 chrono = { version = "0.4.38", default-features = false, features = ["serde", "now"] }
@@ -26,6 +26,7 @@ env_logger = { version = "0.11.3", default-features = false, features = ["auto-c
 futures = { version = "0.3.30", default-features = false }
 http-body-util = { version = "0.1.1", default-features = false }
 # hyper = { version = "0.14", default-features = false, features = ["http1", "client", "runtime"] }
+jsonwebtoken = { version = "9.3.0", default-features = false, features = ["use_pem"] }
 libc = { version = "0.2.80", default-features = false }
 log = { version = "0.4.21", default-features = false }
 miniz_oxide = { version = "0.7.3", default-features = false, features = ["with-alloc"] }
