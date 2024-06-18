@@ -1,4 +1,4 @@
-#![windows_subsystem = "windows"]
+// #![windows_subsystem = "windows"] // TODO Check whether this is necessary
 use std::{env, fs, path::Path, thread, time};
 
 // use arti_client::{TorClient, TorClientConfig};

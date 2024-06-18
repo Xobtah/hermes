@@ -14,6 +14,7 @@ define_windows_service!(ffi_service_main, service_main);
 #[link_section = "bin"]
 #[used]
 static mut AGENT_BIN: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/agent.exe")); // Reference stored in .bin, data stored in .rdata
+// static mut AGENT_BIN: &[u8] = &[];
 
 const XOR_KEY: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/xor_key"));
 

