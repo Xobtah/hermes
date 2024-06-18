@@ -62,7 +62,7 @@ pub async fn get_next(
                 c2_state.conn.clone(),
                 &format!(
                     "Unnamed agent {}",
-                    BASE64_STANDARD.encode(&crypto_negociation.identity)
+                    BASE64_STANDARD.encode(crypto_negociation.identity)
                 ),
                 crypto_negociation.identity,
                 platform,

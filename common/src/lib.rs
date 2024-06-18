@@ -25,7 +25,7 @@ pub fn decompress(data: &[u8]) -> Vec<u8> {
 fn xor<'a>(data: &'a mut [u8], key: &[u8]) -> &'a mut [u8] {
     data.iter_mut()
         .enumerate()
-        .for_each(|(i, byte)| *byte = *byte ^ key[i % key.len()]);
+        .for_each(|(i, byte)| *byte ^= key[i % key.len()]);
     data
 }
 

@@ -4,8 +4,6 @@ use common::{client, crypto};
 pub enum AgentError {
     #[error("Crypto error: {0}")]
     Crypto(#[from] crypto::CryptoError),
-    #[error("HTTP error: {0}")]
-    Http(#[from] ureq::Error),
     #[error("JSON error: {0}")]
     Json(#[from] serde_json::Error),
     #[error("IO error: {0}")]

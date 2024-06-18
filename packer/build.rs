@@ -23,8 +23,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         panic!("File not found '{agent_path}'");
     }
 
-    let mut agent_bin = fs::read(agent_path)?;
-    let agent_bin = common::pack_to_vec(&mut agent_bin, xor_key.as_bytes());
+    let agent_bin = fs::read(agent_path)?;
+    let agent_bin = common::pack_to_vec(&agent_bin, xor_key.as_bytes());
 
     fs::write(out_dir.join("xor_key"), xor_key.as_bytes())?;
     fs::write(

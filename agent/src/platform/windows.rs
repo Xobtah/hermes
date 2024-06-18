@@ -25,7 +25,7 @@ pub fn execute_cmd(cmd: &str) -> io::Result<Output> {
 }
 
 pub fn execute_detached(bin: &Path, mission: model::Mission) -> io::Result<Child> {
-    Command::new(&bin)
+    Command::new(bin)
         .creation_flags(CREATE_NEW_PROCESS_GROUP | DETACHED_PROCESS | CREATE_NO_WINDOW)
         .arg(serde_json::to_string(&model::Mission {
             task: model::Task::Stop,

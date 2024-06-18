@@ -30,25 +30,6 @@ const MAIN_MENU_COMMANDS: &[Item<
         }
         Ok(Some(Menu::SelectAgent))
     }),
-    // Item::new("Create agent", || {
-    //     let Some(platform) = Selection::from(PLATFORMS).select("Select platform")? else {
-    //         println!("No platform selected");
-    //         return Ok(None);
-    //     };
-
-    //     client::agents::create(
-    //         utils::prompt("Agent name", None)?,
-    //         crypto::VerifyingKey::from_bytes(
-    //             fs::read(utils::prompt("Agent identity public key file path", None)?)?
-    //                 .as_slice()
-    //                 .try_into()
-    //                 .unwrap(),
-    //         )
-    //         .unwrap(),
-    //         platform,
-    //     )?;
-    //     Ok(None)
-    // }),
     Item::new("Delete agent", || {
         let Some(agent) = utils::select_agent()? else {
             println!("No agent selected");
@@ -119,7 +100,7 @@ const AGENT_COMMANDS: for<'a> fn(
                 let mission = client::missions::issue(
                     &jwt()?,
                     agent.id,
-                    model::Task::Update(model::Release {
+                    model::Task::Update(Box::new(model::Release {
                         checksum: common::checksum(bin_path)?,
                         verifying_key: crypto::VerifyingKey::from_bytes(
                             fs::read(vk_path)?.as_slice().try_into().unwrap(),
@@ -127,7 +108,7 @@ const AGENT_COMMANDS: for<'a> fn(
                         .unwrap(),
                         bytes: common::compress(&fs::read(bin_path)?),
                         created_at: Default::default(),
-                    }),
+                    })),
                 )?;
                 utils::poll_mission_result(mission.id);
                 Ok(None)
@@ -167,7 +148,7 @@ const AGENT_COMMANDS: for<'a> fn(
 enum Menu {
     Main,
     SelectAgent,
-    Agent(model::Agent),
+    Agent(Box<model::Agent>),
 }
 
 impl Menu {
@@ -177,7 +158,7 @@ impl Menu {
             Menu::Main => Selection::from(MAIN_MENU_COMMANDS).select("Select a command"),
             Menu::SelectAgent => {
                 if let Ok(Some(agent)) = utils::select_agent() {
-                    Ok(Some(Ok(Some(Menu::Agent(agent)))))
+                    Ok(Some(Ok(Some(Menu::Agent(Box::new(agent))))))
                 } else {
                     Ok(None)
                 }

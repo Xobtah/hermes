@@ -54,7 +54,7 @@ pub fn generate_key_exchange_key_pair(
     // Generate ephemeral keypair for key exchange
     let mut ephemeral_private_key = [0u8; X25519_PRIVATE_KEY_SIZE];
     rand_generator.fill_bytes(&mut ephemeral_private_key);
-    let ephemeral_public_key = x25519(ephemeral_private_key.clone(), X25519_BASEPOINT_BYTES);
+    let ephemeral_public_key = x25519(ephemeral_private_key, X25519_BASEPOINT_BYTES);
 
     // Sign ephemeral public key
     let emphemeral_public_key_signature = signing_key.sign(&ephemeral_public_key);
@@ -83,10 +83,8 @@ pub fn encrypt(
     // Generate ephemeral keypair
     let mut ephemeral_private_key = [0u8; X25519_PRIVATE_KEY_SIZE];
     rand_generator.fill_bytes(&mut ephemeral_private_key);
-    let decryption_ephemeral_public_key = x25519(
-        ephemeral_private_key.clone(),
-        x25519_dalek::X25519_BASEPOINT_BYTES,
-    );
+    let decryption_ephemeral_public_key =
+        x25519(ephemeral_private_key, x25519_dalek::X25519_BASEPOINT_BYTES);
 
     // Key exchange
     let mut shared_secret = x25519(ephemeral_private_key, encryption_ephemeral_public_key);
@@ -97,7 +95,7 @@ pub fn encrypt(
 
     // Derive key
     let mut kdf = blake2::VarBlake2b::new_keyed(&shared_secret, XCHACHA20_POLY1305_KEY_SIZE);
-    kdf.update(&nonce);
+    kdf.update(nonce);
     let mut key = kdf.finalize_boxed();
 
     // Encrypt data
@@ -172,7 +170,7 @@ pub fn decrypt(
 
     // Derive key
     let mut kdf = blake2::VarBlake2b::new_keyed(&shared_secret, XCHACHA20_POLY1305_KEY_SIZE);
-    kdf.update(&nonce);
+    kdf.update(nonce);
     let mut key = kdf.finalize_boxed();
 
     // Decrypt

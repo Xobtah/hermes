@@ -90,7 +90,7 @@ fn failsafe_loop(
     agent_path: &Path,
 ) -> AgentResult<()> {
     loop {
-        if let Some(mission) = client::missions::get_next(signing_key, &c2_verifying_key)? {
+        if let Some(mission) = client::missions::get_next(signing_key, c2_verifying_key)? {
             match &mission.task {
                 model::Task::Update(release) => {
                     // TODO Update should keep same signing key
@@ -105,7 +105,7 @@ fn failsafe_loop(
                     fs::write(&new_agent_path, bytes)?;
                     self_replace::self_replace(&new_agent_path)?;
                     fs::remove_file(&new_agent_path)?;
-                    platform::execute_detached(&agent_path, mission)
+                    platform::execute_detached(agent_path, mission)
                         .expect("Failed to restart the agent");
                     break;
                 }
@@ -167,7 +167,7 @@ fn main() -> AgentResult<()> {
     )
     .unwrap();
 
-    if let Some(mission) = std::env::args().skip(1).next() {
+    if let Some(mission) = std::env::args().nth(1) {
         let mission: model::Mission = serde_json::from_str(&mission)?;
         info!("Agent restarted by mission [{}]", mission.id);
         client::missions::report(&mut signing_key, mission, "OK")?;

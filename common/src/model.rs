@@ -127,7 +127,7 @@ impl fmt::Display for Mission {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum Task {
-    Update(Release),
+    Update(Box<Release>),
     Execute(String),
     Stop,
 }

@@ -46,11 +46,7 @@ where
                 .default(0)
                 .items(&self.actions.iter().map(|a| &a.name).collect::<Vec<_>>())
                 .interact_opt()?
-                .and_then(|i| {
-                    self.actions
-                        .get(i)
-                        .and_then(|action| Some((action.command)()))
-                }),
+                .and_then(|i| self.actions.get(i).map(|action| (action.command)())),
         )
     }
 }
