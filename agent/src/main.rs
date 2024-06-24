@@ -1,9 +1,7 @@
-// #![windows_subsystem = "windows"] // TODO Check whether this is necessary
 use std::{env, fs, path::Path, thread, time};
 
 // use arti_client::{TorClient, TorClientConfig};
 // use arti_hyper::ArtiHttpConnector;
-use base64::{prelude::BASE64_STANDARD, Engine as _};
 use common::{client, crypto, model};
 use log::{error, info};
 // use futures::{Stream, StreamExt};
@@ -156,15 +154,11 @@ fn main() -> AgentResult<()> {
         env!("OUT_DIR"),
         "/id.key"
     ))));
-    let c2_verifying_key = crypto::VerifyingKey::from_bytes(
-        BASE64_STANDARD
-            .decode(obfstr::obfstr!(
-                "IX+xwv+SMQr4QZB8ba1n/fx3W3t5KvHQoCtBJ5HJZuk="
-            ))?
-            .as_slice()
-            .try_into()
-            .unwrap(),
-    )
+    let c2_verifying_key = crypto::VerifyingKey::from_bytes(&[
+        0x21, 0x7f, 0xb1, 0xc2, 0xff, 0x92, 0x31, 0x0a, 0xf8, 0x41, 0x90, 0x7c, 0x6d, 0xad, 0x67,
+        0xfd, 0xfc, 0x77, 0x5b, 0x7b, 0x79, 0x2a, 0xf1, 0xd0, 0xa0, 0x2b, 0x41, 0x27, 0x91, 0xc9,
+        0x66, 0xe9,
+    ])
     .unwrap();
 
     if let Some(mission) = std::env::args().nth(1) {

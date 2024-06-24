@@ -1,0 +1,13 @@
+[package]
+name = "stager"
+version = "0.1.0"
+edition = "2021"
+
+[build-dependencies]
+common = { workspace = true }
+
+[dependencies]
+common = { workspace = true }
+obfstr = { workspace = true }
+object = { workspace = true }
+self-replace = { workspace = true }

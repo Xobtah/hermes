@@ -1,8 +1,7 @@
 use std::{env, fs, path::Path};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    println!("cargo::rerun-if-changed=../packer");
-    println!("cargo::rerun-if-changed=.");
+    println!("cargo::rerun-if-changed=..");
 
     if env::var_os("CARGO_CFG_WINDOWS").is_some() {
         embed_resource::compile("dropper-manifest.rc", embed_resource::NONE);

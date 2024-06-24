@@ -3,10 +3,6 @@ name = "packer"
 version = "0.1.0"
 edition = "2021"
 
-[[bin]]
-name = "agentp"
-path = "src/main.rs"
-
 [features]
 windows-service = ["dep:windows-service"]
 
@@ -14,9 +10,6 @@ windows-service = ["dep:windows-service"]
 common = { workspace = true }
 
 [dependencies]
-common = { workspace = true }
-obfstr = { workspace = true }
-object = { workspace = true }
+common = { workspace = true } # TODO Don't import all common to reduce bin size
 rspe = { workspace = true }
-self-replace = { workspace = true }
 windows-service = { workspace = true, optional = true }

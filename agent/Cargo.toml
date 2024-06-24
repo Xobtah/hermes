@@ -7,7 +7,6 @@ edition = "2021"
 common = { workspace = true }
 
 [dependencies]
-base64 = { workspace = true }
 env_logger = { workspace = true }
 # arti-client = { workspace = true }
 # arti-hyper = { workspace = true }

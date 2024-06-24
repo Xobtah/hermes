@@ -1,5 +1,5 @@
 [workspace]
-members = ["agent", "c2", "client", "common", "dropper", "packer",]
+members = ["agent", "c2", "client", "common", "dropper", "packer", "stager",]
 resolver = "2"
 
 [profile.release]
@@ -30,7 +30,7 @@ miniz_oxide = { version = "0.7.3", default-features = false, features = ["with-a
 obfstr = { version = "0.4.3", default-features = false }
 object = { version = "0.36.0", default-features = false, features = ["read", "compression"] }
 rand = { version = "0.8.5", default-features = false, features = ["getrandom"] }
-rspe = { version = "0.1.2", default-features = false } # TODO Maybe rewrite
+rspe = { git = "https://github.com/Xobtah/rspe.git", default-features = false }
 rusqlite = { version = "0.31.0", default-features = false, features = ["chrono"] }
 self-replace = { version = "1.3.7", default-features = false }
 serde = { version = "1.0.200", default-features = false, features = ["derive"] }
