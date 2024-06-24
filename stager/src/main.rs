@@ -18,28 +18,6 @@ fn section_file_range(file: &PeFile<ImageNtHeaders64>, name: &str) -> Option<(u6
     });
 }
 
-// fn rva_to_file_offset(file: &PeFile<ImageNtHeaders64>, rva: u64) -> u64 {
-//     let section_header = file
-//         .section_by_name(obfstr::obfstr!(".rdata"))
-//         .unwrap()
-//         .pe_section();
-//     let rdata_va = section_header.virtual_address.get(LittleEndian);
-//     let rdata_raw_addr = section_header.pointer_to_raw_data.get(LittleEndian);
-//     let base = file.relative_address_base();
-//     rva - base - rdata_va as u64 + rdata_raw_addr as u64
-// }
-
-// fn packed_agent_mut(bin: &mut [u8]) -> Result<&mut [u8], Box<dyn std::error::Error>> {
-//     let pe = PeFile::<ImageNtHeaders64>::parse(&bin)?;
-//     let (offset, size) = section_file_range(&pe, obfstr::obfstr!(".bin")).unwrap();
-//     let bin_section = &bin[offset as usize..][..size as usize];
-//     let addr = <&[u8] as TryInto<[u8; 8]>>::try_into(&bin_section[..8])?;
-//     let addr = rva_to_file_offset(&pe, u64::from_le_bytes(addr));
-//     let size = <&[u8] as TryInto<[u8; 8]>>::try_into(&bin_section[8..])?;
-//     let size = usize::from_le_bytes(size);
-//     Ok(&mut bin[addr as usize..][..size])
-// }
-
 fn secret_key_mut(agent: &mut [u8]) -> Result<&mut [u8], Box<dyn std::error::Error>> {
     let agent_pe = PeFile::<ImageNtHeaders64>::parse(&agent)?;
     let (offset, size) = section_file_range(&agent_pe, obfstr::obfstr!(".sk")).unwrap();
@@ -206,6 +184,38 @@ unsafe fn modify_reloc(mut bin: Vec<u8>) -> Vec<u8> {
     bin
 }
 
+unsafe fn calculate_checksum(bin: &mut [u8]) {
+    let base = bin.as_mut_ptr();
+    let dos_header = base as *mut win_h::IMAGE_DOS_HEADER;
+    let nt_header =
+        (base as usize + (*dos_header).e_lfanew as usize) as *mut win_h::IMAGE_NT_HEADER;
+
+    let checksum_offset = (*dos_header).e_lfanew as usize
+        + std::mem::size_of::<win_h::IMAGE_FILE_HEADER>()
+        + std::mem::size_of::<u32>()
+        + 64usize;
+    let eof = bin.len();
+    let mut checksum = 0u64;
+
+    for offset in (0..eof).step_by(4) {
+        if offset == checksum_offset {
+            continue;
+        }
+        let data = *(bin.as_ptr() as *const u32).offset(offset as isize);
+        checksum = (checksum & 0xFFFFFFFF) + (data as u64) + (checksum >> 32);
+        if checksum > (u32::MAX as u64) {
+            checksum = (checksum & 0xFFFFFFFF) + (checksum >> 32);
+        }
+    }
+
+    checksum = (checksum & 0xFFFF) + (checksum >> 16);
+    checksum = checksum + (checksum >> 16);
+    checksum = checksum & 0xFFFF;
+    checksum += eof as u64;
+
+    (*nt_header).OptionalHeader.CheckSum = checksum as u32;
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Set a secret key in the agent
     let mut agent = common::unpack_to_vec(&AGENT_PACK);
@@ -217,7 +227,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let packer = resize_reloc(PACKER_STUB.to_vec());
         let packer = add_section(packer, &packed_agent);
         let packer = set_reference_to_data(packer, &packed_agent);
-        modify_reloc(packer)
+        let mut packer = modify_reloc(packer);
+        calculate_checksum(&mut packer);
+        packer
     };
 
     // Replace the current executable with the updated one
